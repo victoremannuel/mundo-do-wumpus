@@ -1,3 +1,4 @@
+import random
 from collections.abc import Mapping
 
 import pytest
@@ -7,7 +8,10 @@ from wumpus.environment import GeneratedMap, World
 
 
 def world_with(entities: Mapping[Position, EntityType]) -> World:
-    return World(GeneratedMap(rows=6, cols=6, entities=entities))
+    return World(
+        GeneratedMap(rows=6, cols=6, entities=entities),
+        rng=random.Random(0),
+    )
 
 
 def test_arrow_kills_wumpus_in_same_column() -> None:

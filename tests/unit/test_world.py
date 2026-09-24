@@ -1,3 +1,4 @@
+import random
 from collections.abc import Mapping
 
 import pytest
@@ -10,7 +11,10 @@ from wumpus.environment.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 def world_with(
     entities: Mapping[Position, EntityType] | None = None,
 ) -> World:
-    return World(GeneratedMap(rows=6, cols=6, entities=entities or {}))
+    return World(
+        GeneratedMap(rows=6, cols=6, entities=entities or {}),
+        rng=random.Random(0),
+    )
 
 
 def move_to_center(world: World, *, avoid_south: bool = False) -> None:
@@ -184,16 +188,6 @@ def test_scoring_rules_have_one_canonical_source() -> None:
     assert action_cost(Action.SHOOT) == -10
     assert GOLD_REWARD == 1000
     assert DEATH_PENALTY == -1000
-
-
-def test_bat_teleport_behavior_remains_a_later_phase_boundary() -> None:
-    world = world_with({Position(2, 1): EntityType.BAT})
-
-    result = world.execute(Action.MOVE_FORWARD)
-
-    assert result.position == Position(2, 1)
-    assert result.teleported is False
-    assert world.score == -1
 
 
 def test_world_does_not_publish_hidden_map_collections() -> None:

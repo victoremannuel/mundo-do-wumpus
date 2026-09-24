@@ -1,5 +1,7 @@
 """Private real-world state and deterministic environment mechanics."""
 
+import random
+
 from wumpus.domain import (
     Action,
     ActionResult,
@@ -10,6 +12,11 @@ from wumpus.domain import (
 )
 from wumpus.environment.actions import forward_position, rotated
 from wumpus.environment.arrows import line_of_fire
+from wumpus.environment.bats import (
+    BAT_CHAIN_LIMIT_EVENT,
+    MAX_BAT_TELEPORT_CHAIN,
+    choose_teleport_destination,
+)
 from wumpus.environment.generator import GeneratedMap
 from wumpus.environment.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 from wumpus.environment.sensors import sense
@@ -23,12 +30,13 @@ INVALID_CLIMB_EVENT = "Tentativa inválida de saída."
 class World:
     """Own the hidden map and apply environment rules to agent actions."""
 
-    def __init__(self, generated_map: GeneratedMap) -> None:
+    def __init__(self, generated_map: GeneratedMap, *, rng: random.Random) -> None:
         if not START_POSITION.is_inside(generated_map.rows, generated_map.cols):
             raise ValueError("Generated map does not contain the start position")
 
         self._rows = generated_map.rows
         self._cols = generated_map.cols
+        self._rng = rng
         self._alive_wumpus = self._positions_for(
             generated_map, EntityType.WUMPUS
         )
@@ -118,11 +126,12 @@ class World:
         score_before = self._score
         gold_collected = False
         wumpus_killed = False
+        teleported = False
         self._last_event = None
         self._score += action_cost(action)
 
         if action is Action.MOVE_FORWARD:
-            self._move_forward()
+            teleported = self._move_forward()
         elif action in (Action.TURN_RIGHT, Action.TURN_LEFT):
             self._agent_direction = rotated(self._agent_direction, action)
         elif action is Action.GRAB:
@@ -143,20 +152,52 @@ class World:
             perception=self.observe(),
             gold_collected=gold_collected,
             wumpus_killed=wumpus_killed,
+            teleported=teleported,
             died=self._dead,
             escaped=self._escaped,
         )
 
-    def _move_forward(self) -> None:
+    def _move_forward(self) -> bool:
         destination = forward_position(
             self._agent_position, self._agent_direction
         )
         if not destination.is_inside(self._rows, self._cols):
             self._last_bump = True
-            return
+            return False
 
         self._agent_position = destination
-        if destination in self._pits or destination in self._alive_wumpus:
+        if destination in self._bats:
+            return self._teleport_from_bat()
+
+        self._resolve_current_position()
+        return False
+
+    def _teleport_from_bat(self) -> bool:
+        for _ in range(MAX_BAT_TELEPORT_CHAIN):
+            self._agent_position = choose_teleport_destination(
+                self._rng,
+                rows=self._rows,
+                cols=self._cols,
+            )
+            if self._agent_position not in self._bats:
+                self._resolve_current_position()
+                return True
+
+        self._last_event = BAT_CHAIN_LIMIT_EVENT
+        self._agent_position = choose_teleport_destination(
+            self._rng,
+            rows=self._rows,
+            cols=self._cols,
+            excluded=self._bats,
+        )
+        self._resolve_current_position()
+        return True
+
+    def _resolve_current_position(self) -> None:
+        if (
+            self._agent_position in self._pits
+            or self._agent_position in self._alive_wumpus
+        ):
             self._score += DEATH_PENALTY
             self._dead = True
             self._game_over = True

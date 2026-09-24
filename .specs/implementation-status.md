@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 6 — Morcegos (`NOT_STARTED`)
+FASE 7 — Engine (`NOT_STARTED`)
 
 ## Phase ledger
 
@@ -26,7 +26,7 @@ rename, merge, or reorder phases.
 | FASE 3 — Gerador | `VERIFIED` | `28 passed` targeted; `43 passed` full; 100-seed audit passed; audit `COMPLIANT`. |
 | FASE 4 — Ambiente | `VERIFIED` | `26 passed` targeted; `69 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 5 — Flecha | `VERIFIED` | `35 passed` targeted; `78 passed` full; `compileall` passed; audit `COMPLIANT`. |
-| FASE 6 — Morcegos | `NOT_STARTED` | — |
+| FASE 6 — Morcegos | `VERIFIED` | `42 passed` targeted; `85 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 7 — Engine | `NOT_STARTED` | — |
 | FASE 8 — Memory | `NOT_STARTED` | — |
 | FASE 9 — Knowledge Base | `NOT_STARTED` | — |
@@ -49,16 +49,17 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 5 — Flecha.
-- Completed acceptance criteria: Implemented and tested straight-line unlimited
-  arrows, wall termination, first-live-Wumpus hits, exact `-10` scoring,
-  transient global scream, dead-Wumpus history, stench updates, and safe transit
-  through a dead Wumpus cell.
-- Remaining acceptance criteria: None for FASE 5.
-- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_arrow.py
-  tests/unit/test_world.py -q`; `.venv/bin/python -m pytest -q`;
-  `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `35 passed`; full suite `78 passed`; compilation exit
+- Last completed phase: FASE 6 — Morcegos.
+- Completed acceptance criteria: Implemented and tested injected-RNG bat
+  teleportation, all destination categories, immediate lethal resolution,
+  orientation preservation, persistent bats, chained teleports, a 100-step
+  structural limit, non-bat fallback with a technical event, and a controlled
+  error when no fallback destination exists.
+- Remaining acceptance criteria: None for FASE 6.
+- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_bats.py
+  tests/unit/test_world.py tests/unit/test_arrow.py -q`; `.venv/bin/python -m
+  pytest -q`; `.venv/bin/python -m compileall -q src`.
+- Result: Targeted tests `42 passed`; full suite `85 passed`; compilation exit
   0; verification `PASS`; specification compliance `COMPLIANT`.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: The harness and canonical specification files were
@@ -67,23 +68,26 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `src/wumpus/environment/arrows.py`
+- `src/wumpus/environment/__init__.py`
+- `src/wumpus/environment/bats.py`
 - `src/wumpus/environment/world.py`
 - `tests/unit/test_arrow.py`
+- `tests/unit/test_bats.py`
 - `tests/unit/test_world.py`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Sections 19–20: a kill emits one global scream, removes the Wumpus as a
-  threat and stench source, preserves its death in private environment history,
-  and makes its cell transitable.
-- Sections 21–22: arrows are unlimited, travel in a straight line to the wall,
-  stop at the first live Wumpus, and cost exactly `-10`.
-- Sections 87–88 and 119, FASE 5: same-row, same-column, behind, off-line, two
-  aligned Wumpus, exact-cost, scream, and repeated-shot cases have passing
-  automated coverage.
+- Sections 23, 25, 61, and 92: entering a bat teleports through injected RNG,
+  leaves the bat in place, preserves orientation, resolves the destination,
+  and reports the event in `ActionResult`.
+- Sections 24 and 95: BAT→BAT chains continue with a bounded 100-step loop,
+  then use a non-bat fallback and technical event or a controlled error.
+- Sections 93–94: bat destinations containing a pit or live Wumpus cause
+  immediate death with centralized scoring.
+- Sections 114, 119, and 125–126: seeded teleportation is reproducible without
+  global random state, and the phase has passing edge-case coverage.
 
 ## Current blockers
 
@@ -92,14 +96,13 @@ rename, merge, or reorder phases.
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- Bat cells are sensed and enterable but do not teleport until FASE 6.
 - Strategic shooting decisions remain outside FASE 5.
+- The functional game loop remains intentionally unimplemented until FASE 7.
 
 ## Next action
 
-Begin FASE 6 — Morcegos by extracting its exact contract and implementing only
-teleportation, chained teleports, deterministic injected-RNG selection, and
-the required edge-case tests.
+Begin FASE 7 — Engine by extracting its exact contract and creating the
+functional game loop with only the plan-required temporary simple agent.
 
 ## Checkpoint update contract
 
@@ -121,5 +124,5 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 5 — Flecha verified after focused tests, full regression,
+2026-09-24 — FASE 6 — Morcegos verified after focused tests, full regression,
 source compilation, architecture verification, and specification compliance.
