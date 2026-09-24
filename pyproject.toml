@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mundo-do-wumpus"
+version = "0.1.0"
+description = "Mundo do Wumpus com agente lógico autônomo"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "rich>=13.7,<15",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<10",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
