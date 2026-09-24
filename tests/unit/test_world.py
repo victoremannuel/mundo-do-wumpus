@@ -186,11 +186,9 @@ def test_scoring_rules_have_one_canonical_source() -> None:
     assert DEATH_PENALTY == -1000
 
 
-def test_arrow_and_bat_teleport_behavior_remain_later_phase_boundaries() -> None:
+def test_bat_teleport_behavior_remains_a_later_phase_boundary() -> None:
     world = world_with({Position(2, 1): EntityType.BAT})
 
-    with pytest.raises(NotImplementedError, match="FASE 5"):
-        world.execute(Action.SHOOT)
     result = world.execute(Action.MOVE_FORWARD)
 
     assert result.position == Position(2, 1)

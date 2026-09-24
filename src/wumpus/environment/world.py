@@ -9,6 +9,7 @@ from wumpus.domain import (
     Position,
 )
 from wumpus.environment.actions import forward_position, rotated
+from wumpus.environment.arrows import line_of_fire
 from wumpus.environment.generator import GeneratedMap
 from wumpus.environment.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 from wumpus.environment.sensors import sense
@@ -31,6 +32,7 @@ class World:
         self._alive_wumpus = self._positions_for(
             generated_map, EntityType.WUMPUS
         )
+        self._dead_wumpus: set[Position] = set()
         self._pits = self._positions_for(generated_map, EntityType.PIT)
         self._bats = self._positions_for(generated_map, EntityType.BAT)
         self._gold = self._positions_for(generated_map, EntityType.GOLD)
@@ -73,6 +75,10 @@ class World:
         return self._collected_gold
 
     @property
+    def killed_wumpus(self) -> int:
+        return len(self._dead_wumpus)
+
+    @property
     def game_over(self) -> bool:
         return self._game_over
 
@@ -109,11 +115,9 @@ class World:
 
         if self._game_over:
             raise RuntimeError("Cannot execute actions after the game ends")
-        if action is Action.SHOOT:
-            raise NotImplementedError("SHOOT is implemented in FASE 5")
-
         score_before = self._score
         gold_collected = False
+        wumpus_killed = False
         self._last_event = None
         self._score += action_cost(action)
 
@@ -123,6 +127,8 @@ class World:
             self._agent_direction = rotated(self._agent_direction, action)
         elif action is Action.GRAB:
             gold_collected = self._grab_gold()
+        elif action is Action.SHOOT:
+            wumpus_killed = self._shoot()
         elif action is Action.CLIMB:
             self._climb()
         else:
@@ -136,6 +142,7 @@ class World:
             total_score=self._score,
             perception=self.observe(),
             gold_collected=gold_collected,
+            wumpus_killed=wumpus_killed,
             died=self._dead,
             escaped=self._escaped,
         )
@@ -162,6 +169,23 @@ class World:
         self._collected_gold += 1
         self._score += GOLD_REWARD
         return True
+
+    def _shoot(self) -> bool:
+        for position in line_of_fire(
+            self._agent_position,
+            self._agent_direction,
+            rows=self._rows,
+            cols=self._cols,
+        ):
+            if position not in self._alive_wumpus:
+                continue
+
+            self._alive_wumpus.remove(position)
+            self._dead_wumpus.add(position)
+            self._last_scream = True
+            return True
+
+        return False
 
     def _climb(self) -> None:
         if self._agent_position == START_POSITION:
