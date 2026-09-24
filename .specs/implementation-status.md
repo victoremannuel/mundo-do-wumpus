@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 2 — Domínio (`NOT_STARTED`)
+FASE 3 — Gerador (`NOT_STARTED`)
 
 ## Phase ledger
 
@@ -22,7 +22,7 @@ rename, merge, or reorder phases.
 | Phase | Status | Verified evidence |
 |---|---|---|
 | FASE 1 — Scaffold | `VERIFIED` | `2 passed`; `compileall` passed; specification audit `COMPLIANT`. |
-| FASE 2 — Domínio | `NOT_STARTED` | — |
+| FASE 2 — Domínio | `VERIFIED` | `13 passed` targeted; `15 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 3 — Gerador | `NOT_STARTED` | — |
 | FASE 4 — Ambiente | `NOT_STARTED` | — |
 | FASE 5 — Flecha | `NOT_STARTED` | — |
@@ -49,15 +49,15 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 1 — Scaffold.
-- Completed acceptance criteria: Created `pyproject.toml`, `requirements.txt`,
-  initial `README.md`, importable `src/wumpus`, and scaffold tests; `pytest`
-  executes successfully.
-- Remaining acceptance criteria: None for FASE 1.
-- Last verified commands: `.venv/bin/python -m pytest tests/test_scaffold.py -q`;
+- Last completed phase: FASE 2 — Domínio.
+- Completed acceptance criteria: Implemented and tested `Position`,
+  `Direction`, `Action`, `EntityType`, `Perception`, `ActionResult`, and
+  `GameConfig`, without AI behavior.
+- Remaining acceptance criteria: None for FASE 2.
+- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_domain.py -q`;
   `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `2 passed`; full suite `2 passed`; compilation exit 0;
-  specification compliance `COMPLIANT`.
+- Result: Targeted tests `13 passed`; full suite `15 passed`; compilation exit
+  0; verification `PASS`; specification compliance `COMPLIANT`.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: The harness and canonical specification files were
   pre-existing ignored files. Only the two required state files are included
@@ -65,19 +65,28 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `README.md`
-- `pyproject.toml`
-- `requirements.txt`
-- `src/wumpus/__init__.py`
-- `tests/test_scaffold.py`
+- `src/wumpus/domain/__init__.py`
+- `src/wumpus/domain/coordinate.py`
+- `src/wumpus/domain/enums.py`
+- `src/wumpus/domain/models.py`
+- `src/wumpus/domain/perception.py`
+- `src/wumpus/game/__init__.py`
+- `src/wumpus/game/config.py`
+- `tests/unit/test_domain.py`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 119, FASE 1: required project structure exists.
-- Section 119, FASE 1: `pytest` executes and passes.
-- Sections 120–121: checkpoint test suite and source compilation pass.
+- Section 9: `Direction`, `Action`, and `EntityType` contain the exact required
+  members.
+- Section 13: `Perception` is immutable and contains all six signals.
+- Section 29: `Position` is immutable, ordered, one-based, and supplies the
+  coordinate helpers described by the plan.
+- Section 61: `ActionResult` contains the required state and false event
+  defaults.
+- Section 74: `GameConfig` centralizes the canonical dimensions and counts.
+- Section 119, FASE 2: all seven types exist without AI logic and tests pass.
 
 ## Current blockers
 
@@ -86,14 +95,16 @@ rename, merge, or reorder phases.
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- Domain types and game behavior are intentionally absent until FASE 2 and
-  later phases.
+- `CellRisk` is an optional suggestion in section 9 and is not one of the seven
+  required FASE 2 types; introduce it only if the Risk engine needs it.
+- Configuration/map invariant validation belongs to FASE 3; environment,
+  scoring, and AI behavior remain intentionally absent.
 
 ## Next action
 
-Begin FASE 2 — Domínio by extracting its exact contract and implementing only
-`Position`, `Direction`, `Action`, `EntityType`, `Perception`, `ActionResult`,
-and `GameConfig` with tests.
+Begin FASE 3 — Gerador by extracting its exact contract and implementing only
+the 6x6 seeded map generation, entity counts, safe-zone/no-overlap constraints,
+and invariant tests.
 
 ## Checkpoint update contract
 
@@ -115,5 +126,5 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 1 — Scaffold verified after targeted tests, full regression,
-source compilation, and specification compliance review.
+2026-09-24 — FASE 2 — Domínio verified after targeted tests, full regression,
+source compilation, architecture verification, and specification compliance.
