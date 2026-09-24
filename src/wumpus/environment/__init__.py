@@ -6,10 +6,20 @@ from wumpus.environment.generator import (
     MapGenerationError,
     MapGenerator,
 )
+from wumpus.environment.world import (
+    INVALID_CLIMB_EVENT,
+    START_DIRECTION,
+    START_POSITION,
+    World,
+)
 
 __all__ = (
     "SAFE_INITIAL_CELLS",
     "GeneratedMap",
+    "INVALID_CLIMB_EVENT",
     "MapGenerationError",
     "MapGenerator",
+    "START_DIRECTION",
+    "START_POSITION",
+    "World",
 )
