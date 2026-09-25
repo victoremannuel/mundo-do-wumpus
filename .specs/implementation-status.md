@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 17 — Debug (`VERIFIED`)
+FASE 18 — CLI (`VERIFIED`)
 
 ## Phase ledger
 
@@ -38,7 +38,7 @@ rename, merge, or reorder phases.
 | FASE 15 — Política de saída | `VERIFIED` | `49 passed` targeted; `215 passed` full; `compileall` passed; final 100-seed stress run with 0 crashes and 50 deterministic replays; independent specification and logic audits `COMPLIANT` after fixing exhausted-gold and disconnected-fallback defects. |
 | FASE 16 — UI | `VERIFIED` | `61 passed` targeted (`test_reasoning.py`, `test_console.py`, `test_strategy.py`, `test_simple_agent.py`); `228 passed` full; `compileall` passed; independent specification review `COMPLIANT` after addressing a boundary-test gap, an additive-diff confirmation, a recorded decision, and two presentation cleanups. |
 | FASE 17 — Debug | `VERIFIED` | `5 passed` targeted; `48 passed` affected; `233 passed` full; `compileall`, deterministic snapshots, and anti-cheat checks passed; specification audit `COMPLIANT`. |
-| FASE 18 — CLI | `NOT_STARTED` | — |
+| FASE 18 — CLI | `VERIFIED` | `7 passed` targeted; `240 passed` full; `compileall` passed; deterministic seed replay, `--debug`/`--step`/`--no-delay` manual smoke checks passed; specification audit `COMPLIANT`. |
 | FASE 19 — Integration tests | `NOT_STARTED` | — |
 | FASE 20 — E2E | `NOT_STARTED` | — |
 | FASE 21 — README final | `NOT_STARTED` | — |
@@ -49,26 +49,34 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 17 — Debug.
-- Completed acceptance criteria: Added an explicit professor/debug path for
-  sections 69-71. `World.debug_snapshot()` returns an immutable current-state
-  `DebugWorldSnapshot`; `wumpus.debug.DebugRenderer` is the only presentation
-  path that accepts `World`, renders both `MAPA CONHECIDO PELO AGENTE` and
-  `MAPA REAL`, and displays the current agent orientation plus live Wumpus,
-  pits, uncollected gold, bats, and empty cells. The normal UI, game engine,
-  and agent packages do not import the debug package or snapshot type.
-- Remaining acceptance criteria: None for FASE 17. CLI wiring for `--debug`
-  remains explicitly assigned to FASE 18 by the phase roadmap.
-- Last verified commands: `.venv/bin/python -m pytest
-  tests/unit/test_debug_renderer.py -q`; `.venv/bin/python -m pytest
-  tests/unit/test_debug_renderer.py tests/unit/test_console.py
-  tests/unit/test_world.py tests/unit/test_simple_agent.py -q`;
-  `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`;
-  100-seed deterministic debug-snapshot replay; `git diff --check`.
-- Result: targeted `5 passed`; affected `48 passed`; full suite `233 passed`
-  (up from 228); compilation, determinism, anti-cheat, and diff checks exited
-  0. Ruff was not installed/configured. Specification compliance review was
-  `COMPLIANT` with no open findings.
+- Last completed phase: FASE 18 — CLI.
+- Completed acceptance criteria: Added `main.py` as the composition root that
+  builds one `random.Random(seed)`, a `MapGenerator`-produced `World`, and a
+  `SimpleAgent`, then drives them through the unchanged `GameEngine` loop.
+  Wired all five plan-defined flags: `--seed` (reproducible generation),
+  `--debug` (routes turn rendering through `DebugRenderer`, which is the only
+  place the real `World` is forwarded, matching the already-VERIFIED FASE 17
+  boundary), `--step` (blocks on `input()` once per turn), `--delay` (default
+  0.5s `time.sleep` between automatic turns), and `--no-delay` (forces zero
+  delay). Final outcome always renders via `ConsoleRenderer.render_final` and
+  prints `ESCAPOU DA CAVERNA` / `AGENTE MORREU` per section 142. Inserted the
+  repository's `src/` onto `sys.path` at the top of `main.py` so
+  `python main.py ...` runs without a separate install step, matching section
+  142's `pip install -r requirements.txt` + `python main.py` expectation.
+- Remaining acceptance criteria: None for FASE 18.
+- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_cli.py
+  -q`; `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src
+  main.py`; `python main.py --seed 42 --no-delay` run twice compared byte-for-
+  byte for the final summary; `python main.py --seed 5 --no-delay --debug`
+  (confirmed `MAPA REAL` panels render); `yes "" | python main.py --seed 5
+  --step` (confirmed one prompt per turn); `git diff --check`.
+- Result: targeted `7 passed`; full suite `240 passed` (up from 233);
+  compilation exited 0; two same-seed runs produced identical final score/
+  turns/status; `--debug` and `--step` manual smoke checks behaved as
+  specified. Ruff was not installed/configured. Specification compliance
+  review was `COMPLIANT` with no BLOCKER/HIGH/MEDIUM findings (one LOW
+  informational note about `SimpleAgent`'s unused `rng` constructor parameter,
+  pre-existing from earlier phases and not a FASE 18 defect).
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -76,22 +84,25 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `src/wumpus/environment/world.py`
-- `src/wumpus/debug/__init__.py` (new)
-- `src/wumpus/debug/renderer.py` (new)
-- `src/wumpus/ui/symbols.py`
-- `tests/unit/test_debug_renderer.py` (new)
+- `main.py` (new)
+- `tests/unit/test_cli.py` (new)
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Sections 69 and 71: professor mode renders the known and real maps together;
-  the real map uses current environment state and the centralized `W`, `P`,
-  `G`, `B`, `.`, and oriented-agent symbols.
-- Section 70: hidden state flows only from `World` to `DebugRenderer` through
-  an immutable snapshot. Production agent, engine, and normal UI code neither
-  imports nor receives the debug snapshot or renderer.
+- Section 8: map generation uses an injected `random.Random(seed)`, never the
+  global `random` module, so `--seed` reproduces a map deterministically.
+- Sections 69, 72: `--debug` shows `MAPA CONHECIDO PELO AGENTE` and `MAPA
+  REAL` together for every turn; the default mode shows only the known map.
+- Section 70: the real `World` is forwarded only to the FASE 17
+  `DebugRenderer`, never to `SimpleAgent`, `GameEngine`, or the normal
+  `ConsoleRenderer`.
+- Sections 72-73: `--delay`/`--no-delay` control the pause between automatic
+  turns; `--step` blocks on `ENTER` after each turn's render instead.
+- Section 142: the program is runnable as `python main.py --seed 42 --step`
+  and prints `ESCAPOU DA CAVERNA` or `AGENTE MORREU` on the corresponding
+  terminal outcome.
 
 ## Current blockers
 
@@ -113,20 +124,26 @@ rename, merge, or reorder phases.
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
-  shooting count, exploration percentage, and seed are deferred to the later
-  statistics/CLI work.
+  shooting count, exploration percentage, and seed are not printed in the
+  final panel; deferred to later statistics work (not a FASE 18 acceptance
+  criterion, which lists only the five flags).
 - The reasoning panel always shows the *previous* turn's `DecisionReason`
   alongside the newly rendered observation, never a same-turn preview of the
   upcoming action -- an inherent consequence of the already-`VERIFIED` FASE 7
   engine's `observe -> render -> decide` order, recorded as `DEC-007`.
-- `ConsoleRenderer` and `DebugRenderer` are not yet wired into a runnable
-  entry point; all CLI flags, including `--debug`, belong to FASE 18.
+- `SimpleAgent`'s constructor accepts an `rng: random.Random` parameter that
+  is stored but never used internally (pre-existing since earlier phases);
+  `main.py` passes the same RNG instance used for map generation/world
+  mechanics. Since the parameter is unused, no entropy-sharing side effect
+  exists today; noted by the FASE 18 specification review as a LOW,
+  non-blocking observation for future attention if that parameter ever
+  becomes load-bearing.
 
 ## Next action
 
-Begin FASE 18 — CLI by adding the plan-defined flags (`--seed`, `--debug`,
-`--step`, `--delay`, and `--no-delay`) and wiring the existing normal/debug
-renderers without changing the agent/environment boundary.
+Begin FASE 19 — Integration tests: run the real, unmodified `SimpleAgent`
+against known/generated maps through `GameEngine` to validate end-to-end
+behavior beyond the existing unit-level stress sweeps.
 
 ## Checkpoint update contract
 
@@ -148,8 +165,9 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-25 — FASE 17 — Debug verified: added an immutable current real-map
-snapshot and an explicit `DebugRenderer` that shows agent knowledge beside the
-real map while leaving the agent, engine, and normal UI isolated from hidden
-state. Targeted `5 passed`, affected `48 passed`, full `233 passed`, compilation
-and deterministic replay passed, and specification audit was `COMPLIANT`.
+2026-09-25 — FASE 18 — CLI verified: added `main.py` wiring `--seed`,
+`--debug`, `--step`, `--delay`, and `--no-delay` over the unchanged
+`GameEngine`/`SimpleAgent`/`World` components, preserving the agent/
+environment boundary (the real `World` reaches only `DebugRenderer`).
+Targeted `7 passed`, full `240 passed`, compilation and deterministic-seed
+smoke checks passed, and specification audit was `COMPLIANT`.
