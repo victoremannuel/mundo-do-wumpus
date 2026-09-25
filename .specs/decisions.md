@@ -63,7 +63,7 @@ Sections 5, 57, and 58; `src/wumpus/game/config.py`;
 ## DEC-003 — Intersection inference with multiple hazards
 
 Date: 2026-09-24
-Status: PROPOSED
+Status: ACCEPTED
 Affected phase(s): FASE 10 — Inference Engine
 
 Context:
@@ -74,27 +74,24 @@ be satisfied by different hazards outside their singleton intersection, so the
 required confirmation is not logically valid in every permitted world.
 
 Decision:
-User decision required. The recommended multiplicity-aware interpretation is
-to retain each positive perception as an existential candidate constraint and
-confirm only when that individual constraint has one unresolved candidate.
-The alternative is to implement section 37 literally, accepting possible false
-confirmations in worlds with multiple hazards of the same type.
+Retain each positive perception as an independent existential candidate
+constraint. Confirm only when one individual positive constraint has a single
+unresolved candidate. A singleton intersection between separate constraints
+remains possible knowledge and does not alone confirm a hazard.
 
 Reason:
 The production logical agent must not assert knowledge that does not follow
-from its observations. Neither instruction precedence nor existing accepted
-decisions resolve the conflict between the literal intersection rule and the
-configured hazard multiplicity.
+from its observations. The user explicitly authorized the recommended
+multiplicity-aware interpretation on 2026-09-24.
 
 Consequences:
-FASE 10 remains `BLOCKED`. Absence, presence, elimination, safety, bounded
-fixed-point processing, functional events, and fail-closed contradiction
-handling can be implemented and tested, but intersection behavior and the
-phase gate require an explicit requirement decision.
+Pairwise intersections cannot create false confirmations when distinct hazards
+can satisfy the observations. Elimination and fixed-point propagation continue
+to confirm hazards when an individual constraint is reduced to one candidate.
 
 Evidence:
-Sections 7, 34–38, 74, and 119 FASE 10; independent FASE 10 logic and
-specification reviews; `tests/unit/test_inference.py`.
+Sections 7, 34–38, 74, and 119 FASE 10; user authorization on 2026-09-24;
+`tests/unit/test_inference.py`.
 
 ## Entry format
 

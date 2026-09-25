@@ -91,7 +91,7 @@ class InferenceEngine:
             for hazard in HAZARD_TYPES:
                 if not self._signal(perception, hazard):
                     continue
-                candidates = self._candidates(source, hazard)
+                candidates = self._constraint_candidates(source, hazard)
                 if self._confirmed(hazard).intersection(candidates):
                     continue
                 if not candidates:
@@ -114,7 +114,7 @@ class InferenceEngine:
             for hazard in HAZARD_TYPES:
                 if not self._signal(perception, hazard):
                     continue
-                candidates = self._candidates(source, hazard)
+                candidates = self._constraint_candidates(source, hazard)
                 if self._confirmed(hazard).intersection(candidates):
                     continue
                 if len(candidates) == 1:
@@ -126,11 +126,17 @@ class InferenceEngine:
                             (position,),
                         )
 
-    def _candidates(
+    def _constraint_candidates(
         self,
         source: Position,
         hazard: EntityType,
     ) -> frozenset[Position]:
+        """Return the domain of one positive existential sensor constraint.
+
+        Domains from distinct positive observations are intentionally not
+        intersected: valid worlds may contain multiple hazards of each type.
+        """
+
         ruled_out = self._negative(hazard)
         return frozenset(
             position

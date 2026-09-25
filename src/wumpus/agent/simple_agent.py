@@ -1,4 +1,4 @@
-"""Temporary mechanical agent with observable memory and no inference."""
+"""Temporary policy agent with observable memory and logical inference."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ _TURN_ACTIONS = (Action.TURN_LEFT, Action.TURN_RIGHT)
 
 
 class SimpleAgent:
-    """Decide from observations only, without inference or map knowledge.
+    """Update agent-owned knowledge, then choose a temporary mechanical action.
 
-    This placeholder keeps an episodic memory so FASE 8 can exercise memory in
-    the real loop. Knowledge representation and reasoning begin in FASE 9.
+    Inference uses reduced observations only. Planning and strategy remain
+    intentionally deferred to their later phases.
     """
 
     def __init__(

@@ -63,14 +63,71 @@ def test_present_signals_add_typed_candidates(
     assert hazard in (EntityType.PIT, EntityType.WUMPUS, EntityType.BAT)
 
 
-def test_elimination_confirms_the_only_remaining_candidate() -> None:
+@pytest.mark.parametrize(
+    ("hazard", "signal", "confirmed_attribute"),
+    [
+        (EntityType.PIT, {"breeze": True}, "confirmed_pits"),
+        (EntityType.WUMPUS, {"stench": True}, "confirmed_wumpus"),
+        (EntityType.BAT, {"bat_noise": True}, "confirmed_bats"),
+    ],
+)
+def test_elimination_confirms_the_only_remaining_candidate(
+    hazard: EntityType,
+    signal: dict[str, bool],
+    confirmed_attribute: str,
+) -> None:
     base = KnowledgeBase(6, 6)
-    base.mark_not(Position(1, 2), EntityType.PIT)
+    base.mark_not(Position(1, 2), hazard)
     engine = InferenceEngine(base)
 
-    engine.observe(Position(1, 1), perception(breeze=True))
+    engine.observe(Position(1, 1), perception(**signal))
 
-    assert base.confirmed_pits == frozenset({Position(2, 1)})
+    assert getattr(base, confirmed_attribute) == frozenset({Position(2, 1)})
+
+
+@pytest.mark.parametrize(
+    ("hazard", "signal", "confirmed_attribute"),
+    [
+        (EntityType.PIT, {"breeze": True}, "confirmed_pits"),
+        (EntityType.WUMPUS, {"stench": True}, "confirmed_wumpus"),
+        (EntityType.BAT, {"bat_noise": True}, "confirmed_bats"),
+    ],
+)
+def test_singleton_intersection_does_not_confirm_with_multiple_hazards(
+    hazard: EntityType,
+    signal: dict[str, bool],
+    confirmed_attribute: str,
+) -> None:
+    base = KnowledgeBase(6, 6)
+    base.mark_safe(Position(1, 1))
+    engine = InferenceEngine(base)
+
+    engine.observe(Position(1, 2), perception(**signal))
+    engine.observe(Position(2, 1), perception(**signal))
+
+    common = Position(2, 2)
+    assert common in {
+        EntityType.PIT: base.possible_pits,
+        EntityType.WUMPUS: base.possible_wumpus,
+        EntityType.BAT: base.possible_bats,
+    }[hazard]
+    assert getattr(base, confirmed_attribute) == frozenset()
+
+
+def test_fixed_point_propagates_cross_hazard_elimination_cascade() -> None:
+    base = KnowledgeBase(6, 6)
+    base.mark_safe(Position(1, 1))
+    base.mark_not(Position(3, 1), EntityType.WUMPUS)
+    engine = InferenceEngine(base)
+
+    both_signals = perception(breeze=True, stench=True)
+    engine.observe(Position(1, 2), both_signals)
+    engine.observe(Position(2, 1), both_signals)
+
+    assert base.confirmed_wumpus == frozenset({Position(2, 2)})
+    assert base.confirmed_pits == frozenset(
+        {Position(1, 3), Position(3, 1)}
+    )
 
 
 @pytest.mark.parametrize(

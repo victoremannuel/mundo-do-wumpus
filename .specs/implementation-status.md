@@ -5,14 +5,14 @@ This file records execution state only. Requirements remain in
 
 ## Overall status
 
-`BLOCKED`
+`IN_PROGRESS`
 
 Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 `VERIFIED`.
 
 ## Current phase
 
-FASE 10 — Inference Engine (`BLOCKED`)
+FASE 11 — Planner (`NOT_STARTED`)
 
 ## Phase ledger
 
@@ -30,7 +30,7 @@ rename, merge, or reorder phases.
 | FASE 7 — Engine | `VERIFIED` | `24 passed` targeted; `109 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 8 — Memory | `VERIFIED` | `7 passed` targeted; `31 passed` affected; `116 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 9 — Knowledge Base | `VERIFIED` | `14 passed` targeted; `45 passed` affected; `130 passed` full; `compileall` passed; independent audit `COMPLIANT`. |
-| FASE 10 — Inference Engine | `BLOCKED` | Noncontroversial inference: `12 passed` targeted, `58 passed` affected, `143 passed` full, and `compileall` passed; independent reviews found section 37 unsound with configured hazard multiplicity. |
+| FASE 10 — Inference Engine | `VERIFIED` | `18 passed` targeted; `64 passed` affected; `149 passed` full; `compileall`, determinism, and anti-cheat checks passed; independent logic/specification audits `COMPLIANT`. |
 | FASE 11 — Planner | `NOT_STARTED` | — |
 | FASE 12 — Strategy | `NOT_STARTED` | — |
 | FASE 13 — Wumpus hunting | `NOT_STARTED` | — |
@@ -45,30 +45,29 @@ rename, merge, or reorder phases.
 
 ## Current checkpoint
 
-- Checkpoint type: `BLOCKED`.
+- Checkpoint type: `VERIFIED`.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 9 — Knowledge Base.
+- Last completed phase: FASE 10 — Inference Engine.
 - Completed acceptance criteria: Implemented absence rules for all three hazard
   signals, typed candidates for positive signals, singleton elimination,
   derived safety, bounded fixed-point processing, idempotent functional events,
   fail-closed inconsistent-evidence handling, and integration through reduced
   observations only.
-- Remaining acceptance criteria: Resolve and implement section 37 intersection
-  semantics, add the selected intersection evidence, and repeat the critical
-  logic/specification gate before FASE 10 can be `VERIFIED`.
+- Remaining acceptance criteria: None for FASE 10. Planning and pathfinding
+  remain intentionally assigned to FASE 11.
 - Last verified commands: `.venv/bin/python -m pytest
   tests/unit/test_inference.py -q`; `.venv/bin/python -m pytest
   tests/unit/test_inference.py tests/unit/test_knowledge.py
   tests/unit/test_memory.py tests/unit/test_simple_agent.py
   tests/unit/test_engine.py -q`;
   `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `12 passed`; affected tests `58 passed`; full suite
-  `143 passed`; compilation exit 0. Automated verification passed for the
-  implemented subset. Independent logic and specification reviews are
-  `NON_COMPLIANT` because the literal singleton-intersection rule is unsound
-  when a valid world contains multiple hazards of the same type.
+- Result: Targeted tests `18 passed`; affected tests `64 passed`; full suite
+  `149 passed`; compilation exit 0; seeded determinism and anti-cheat tests
+  passed. Independent logic and specification reviews are `COMPLIANT` after
+  the authorized multiplicity-aware interpretation was implemented and
+  documented in `DEC-003`.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -90,8 +89,12 @@ rename, merge, or reorder phases.
 - Sections 34–36, 38–40, and 96–98: absence creates negative and safe
   knowledge, presence creates typed candidates, and elimination confirms the
   only unresolved candidate for pits, Wumpus, and bats.
+- Sections 7, 37, and 74 under accepted `DEC-003`: each positive observation
+  remains an independent existential constraint; singleton intersections do
+  not falsely confirm hazards when multiple hazards can satisfy the evidence.
 - Sections 127 and 130–131: inference repeats to a bounded fixed point, remains
-  idempotent, and records functional events only for effective changes.
+  idempotent, propagates cross-hazard elimination cascades, and records
+  functional events only for effective changes.
 - Sections 57–59 and 123–124: `SimpleAgent` feeds inference exclusively from
   reduced `AgentObservation` and non-lethal `ActionResult` values.
 - Inconsistent positive evidence with no compatible candidate fails closed
@@ -99,11 +102,7 @@ rename, merge, or reorder phases.
 
 ## Current blockers
 
-- `DEC-003`: section 37 mandates confirmation from a singleton intersection,
-  but sections 7 and 74 allow multiple hazards of each type. Two positive
-  perceptions can therefore be caused by distinct hazards outside the common
-  cell, making literal confirmation logically unsound. User direction is
-  required to choose multiplicity-aware inference or literal section 37.
+- None.
 
 ## Known limitations and technical debt
 
@@ -118,13 +117,14 @@ rename, merge, or reorder phases.
   already prove and does not claim those sections as verified.
 - Console rendering, debug map, and the CLI remain unimplemented until FASE 16
   to FASE 18; the engine exposes `on_render` and `on_render_final` hooks for them.
+- When FASE 13 adds shooting, it must reconcile historical stench constraints
+  and call the existing dead-Wumpus knowledge transition after a scream/kill.
 
 ## Next action
 
-Obtain the user's decision for `DEC-003`. Recommended: use multiplicity-aware
-existential constraints and do not confirm a singleton intersection unless one
-individual positive constraint has only that unresolved candidate. Then add
-the chosen tests, rerun verification, and repeat independent critical review.
+Begin FASE 11 — Planner by implementing isolated BFS over agent-owned safe
+knowledge, including shortest-path, orientation/action conversion, unreachable
+goals, and the no-path case without consulting environment state.
 
 ## Checkpoint update contract
 
@@ -146,6 +146,6 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 10 — Inference Engine checkpointed as `BLOCKED` after its
-noncontroversial subset passed focused, affected, full, and compilation checks;
-independent critical reviews identified unresolved intersection semantics.
+2026-09-24 — FASE 10 — Inference Engine verified after explicit acceptance of
+the multiplicity-aware `DEC-003`, focused/affected/full tests, compilation,
+determinism, anti-cheat validation, and independent critical reviews.
