@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 18 — CLI (`VERIFIED`)
+FASE 19 — Integration tests (`VERIFIED`)
 
 ## Phase ledger
 
@@ -39,7 +39,7 @@ rename, merge, or reorder phases.
 | FASE 16 — UI | `VERIFIED` | `61 passed` targeted (`test_reasoning.py`, `test_console.py`, `test_strategy.py`, `test_simple_agent.py`); `228 passed` full; `compileall` passed; independent specification review `COMPLIANT` after addressing a boundary-test gap, an additive-diff confirmation, a recorded decision, and two presentation cleanups. |
 | FASE 17 — Debug | `VERIFIED` | `5 passed` targeted; `48 passed` affected; `233 passed` full; `compileall`, deterministic snapshots, and anti-cheat checks passed; specification audit `COMPLIANT`. |
 | FASE 18 — CLI | `VERIFIED` | `7 passed` targeted; `240 passed` full; `compileall` passed; deterministic seed replay, `--debug`/`--step`/`--no-delay` manual smoke checks passed; specification audit `COMPLIANT`. |
-| FASE 19 — Integration tests | `NOT_STARTED` | — |
+| FASE 19 — Integration tests | `VERIFIED` | `2 passed` targeted; `4 passed` integration/determinism/antitrapaça; `242 passed` full; `compileall` passed; independent specification and test audits `COMPLIANT`/`PASS`. |
 | FASE 20 — E2E | `NOT_STARTED` | — |
 | FASE 21 — README final | `NOT_STARTED` | — |
 
@@ -49,34 +49,29 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 18 — CLI.
-- Completed acceptance criteria: Added `main.py` as the composition root that
-  builds one `random.Random(seed)`, a `MapGenerator`-produced `World`, and a
-  `SimpleAgent`, then drives them through the unchanged `GameEngine` loop.
-  Wired all five plan-defined flags: `--seed` (reproducible generation),
-  `--debug` (routes turn rendering through `DebugRenderer`, which is the only
-  place the real `World` is forwarded, matching the already-VERIFIED FASE 17
-  boundary), `--step` (blocks on `input()` once per turn), `--delay` (default
-  0.5s `time.sleep` between automatic turns), and `--no-delay` (forces zero
-  delay). Final outcome always renders via `ConsoleRenderer.render_final` and
-  prints `ESCAPOU DA CAVERNA` / `AGENTE MORREU` per section 142. Inserted the
-  repository's `src/` onto `sys.path` at the top of `main.py` so
-  `python main.py ...` runs without a separate install step, matching section
-  142's `pip install -r requirements.txt` + `python main.py` expectation.
-- Remaining acceptance criteria: None for FASE 18.
-- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_cli.py
+- Last completed phase: FASE 19 — Integration tests.
+- Completed acceptance criteria: Added a dedicated integration suite that runs
+  the production `GeneratedMap -> World -> SimpleAgent -> GameEngine` stack,
+  without doubles, against two deterministic known maps. The first proves
+  autonomous exploration, gold collection, score propagation, return to
+  `[1,1]`, and `CLIMB`. The mixed map proves perception-driven inference,
+  confirmed-pit avoidance, confirmed-Wumpus hunting/death reconciliation,
+  gold collection, score propagation, safe return, and escape. Tests construct
+  hidden maps as fixtures but never pass them to the agent; the engine keeps
+  `AgentObservation`/`ActionResult` as the only runtime information surfaces.
+- Remaining acceptance criteria: None for FASE 19.
+- Last verified commands: `.venv/bin/python -m pytest
+  tests/integration/test_known_maps.py -q`; `.venv/bin/python -m pytest
+  tests/integration/test_known_maps.py
+  tests/unit/test_simple_agent.py::test_agent_package_never_imports_the_environment_or_hidden_map_types
+  tests/unit/test_engine.py::test_seeded_games_with_the_simple_agent_are_reproducible
   -q`; `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src
-  main.py`; `python main.py --seed 42 --no-delay` run twice compared byte-for-
-  byte for the final summary; `python main.py --seed 5 --no-delay --debug`
-  (confirmed `MAPA REAL` panels render); `yes "" | python main.py --seed 5
-  --step` (confirmed one prompt per turn); `git diff --check`.
-- Result: targeted `7 passed`; full suite `240 passed` (up from 233);
-  compilation exited 0; two same-seed runs produced identical final score/
-  turns/status; `--debug` and `--step` manual smoke checks behaved as
-  specified. Ruff was not installed/configured. Specification compliance
-  review was `COMPLIANT` with no BLOCKER/HIGH/MEDIUM findings (one LOW
-  informational note about `SimpleAgent`'s unused `rng` constructor parameter,
-  pre-existing from earlier phases and not a FASE 18 defect).
+  main.py`; `git diff --check`.
+- Result: targeted `2 passed`; integration/determinism/antitrapaça `4 passed`;
+  full suite `242 passed` (up from 240); compilation exited 0. Ruff was not
+  installed/configured. Independent specification and architecture review was
+  `COMPLIANT` after state persistence, and independent test review was `PASS`;
+  its score-propagation recommendation was incorporated before final evidence.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -84,25 +79,22 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `main.py` (new)
-- `tests/unit/test_cli.py` (new)
+- `tests/integration/test_known_maps.py` (new)
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 8: map generation uses an injected `random.Random(seed)`, never the
-  global `random` module, so `--seed` reproduces a map deterministically.
-- Sections 69, 72: `--debug` shows `MAPA CONHECIDO PELO AGENTE` and `MAPA
-  REAL` together for every turn; the default mode shows only the known map.
-- Section 70: the real `World` is forwarded only to the FASE 17
-  `DebugRenderer`, never to `SimpleAgent`, `GameEngine`, or the normal
-  `ConsoleRenderer`.
-- Sections 72-73: `--delay`/`--no-delay` control the pause between automatic
-  turns; `--step` blocks on `ENTER` after each turn's render instead.
-- Section 142: the program is runnable as `python main.py --seed 42 --step`
-  and prints `ESCAPOU DA CAVERNA` or `AGENTE MORREU` on the corresponding
-  terminal outcome.
+- Section 119, FASE 19: the unmodified real logical agent runs through the real
+  engine and environment against multiple known maps, with assertions on
+  terminal behavior and agent-owned knowledge rather than smoke-only execution.
+- Sections 57-60: integration preserves the antitrapaça boundary; known hidden
+  state exists only in the test fixture and environment, while `SimpleAgent`
+  receives reduced observations/results through `GameEngine`.
+- Sections 134-135: integrated scenarios prove autonomy, perception/inference,
+  safe planning, confirmed-danger avoidance, rational shooting, gold
+  collection, synchronized scoring, return to the exit, and successful climb.
+- Section 137: the complete pytest suite remains green with zero failures.
 
 ## Current blockers
 
@@ -138,12 +130,15 @@ rename, merge, or reorder phases.
   exists today; noted by the FASE 18 specification review as a LOW,
   non-blocking observation for future attention if that parameter ever
   becomes load-bearing.
+- FASE 19 intentionally uses two deterministic known maps and does not add a
+  multi-seed generated-map matrix, which belongs to FASE 20. Bat teleport and
+  lethal-map integration remain covered at unit/component level rather than by
+  this phase's known-map scenarios.
 
 ## Next action
 
-Begin FASE 19 — Integration tests: run the real, unmodified `SimpleAgent`
-against known/generated maps through `GameEngine` to validate end-to-end
-behavior beyond the existing unit-level stress sweeps.
+Begin FASE 20 — E2E: execute the production game over at least 10 fixed seeds,
+prove bounded termination without exceptions, and keep deterministic evidence.
 
 ## Checkpoint update contract
 
@@ -165,9 +160,9 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-25 — FASE 18 — CLI verified: added `main.py` wiring `--seed`,
-`--debug`, `--step`, `--delay`, and `--no-delay` over the unchanged
-`GameEngine`/`SimpleAgent`/`World` components, preserving the agent/
-environment boundary (the real `World` reaches only `DebugRenderer`).
-Targeted `7 passed`, full `240 passed`, compilation and deterministic-seed
-smoke checks passed, and specification audit was `COMPLIANT`.
+2026-09-25 — FASE 19 — Integration tests verified: added two known-map tests
+running the unmodified `SimpleAgent`, `World`, and `GameEngine` together. They
+prove gold collection/return plus mixed-map inference, confirmed-pit avoidance,
+Wumpus hunting, synchronized scoring, and escape without hidden-state leakage.
+Targeted `2 passed`, full `242 passed`, compilation passed, and independent
+specification/test audits were `COMPLIANT`/`PASS`.
