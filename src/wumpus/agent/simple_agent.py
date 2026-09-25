@@ -1,11 +1,12 @@
-"""Temporary mechanical agent used to exercise the loop in FASE 7."""
+"""Temporary mechanical agent with observable memory and no inference."""
 
 from __future__ import annotations
 
 import random
 
+from wumpus.agent.memory import AgentMemory
 from wumpus.domain import Action, ActionResult, AgentObservation
-from wumpus.game.config import START_POSITION
+from wumpus.game.config import START_DIRECTION, START_POSITION
 
 
 _MOVEMENT_ACTIONS = (Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT)
@@ -14,24 +15,29 @@ _TURN_ACTIONS = (Action.TURN_LEFT, Action.TURN_RIGHT)
 
 
 class SimpleAgent:
-    """Decide from observations only, without any reasoning or memory of the map.
+    """Decide from observations only, without inference or map knowledge.
 
-    This placeholder proves the game loop works mechanically. The reasoning
-    agent replaces it from FASE 8 onwards.
+    This placeholder keeps an episodic memory so FASE 8 can exercise memory in
+    the real loop. Knowledge representation and reasoning begin in FASE 9.
     """
 
     def __init__(self, rng: random.Random) -> None:
         self._rng = rng
         self._blocked = False
-        self._actions_taken = 0
+        self._memory = AgentMemory(START_POSITION, START_DIRECTION)
+
+    @property
+    def memory(self) -> AgentMemory:
+        return self._memory
 
     @property
     def actions_taken(self) -> int:
-        return self._actions_taken
+        return len(self._memory.actions)
 
     def decide(self, observation: AgentObservation) -> Action:
         """Return the next action using only the received observation."""
 
+        self._memory.record_observation(observation)
         if observation.perception.glitter:
             return Action.GRAB
         if observation.collected_gold > 0 and observation.position == START_POSITION:
@@ -43,5 +49,5 @@ class SimpleAgent:
     def process_result(self, result: ActionResult) -> None:
         """Update the minimal internal state derived from the last result."""
 
-        self._actions_taken += 1
+        self._memory.record_result(result)
         self._blocked = result.perception.bump

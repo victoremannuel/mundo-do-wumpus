@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 8 — Memory (`NOT_STARTED`)
+FASE 9 — Knowledge Base (`NOT_STARTED`)
 
 ## Phase ledger
 
@@ -28,7 +28,7 @@ rename, merge, or reorder phases.
 | FASE 5 — Flecha | `VERIFIED` | `35 passed` targeted; `78 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 6 — Morcegos | `VERIFIED` | `42 passed` targeted; `85 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 7 — Engine | `VERIFIED` | `24 passed` targeted; `109 passed` full; `compileall` passed; audit `COMPLIANT`. |
-| FASE 8 — Memory | `NOT_STARTED` | — |
+| FASE 8 — Memory | `VERIFIED` | `7 passed` targeted; `31 passed` affected; `116 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 9 — Knowledge Base | `NOT_STARTED` | — |
 | FASE 10 — Inference Engine | `NOT_STARTED` | — |
 | FASE 11 — Planner | `NOT_STARTED` | — |
@@ -49,57 +49,45 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 7 — Engine.
-- Completed acceptance criteria: Implemented the functional game loop
-  (`observe → render hook → decide → execute → process_result → final render`),
-  the reduced `AgentObservation` surface, terminal statuses `ESCAPED`, `DEAD`, and
-  `TURN_LIMIT` with `MAX_TURNS = 2000`, the end-of-game outcome report, and the
-  temporary `SimpleAgent` deciding only from observations with an injected RNG.
-- Remaining acceptance criteria: None for FASE 7.
-- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_engine.py
-  tests/unit/test_simple_agent.py -q`; `.venv/bin/python -m pytest -q`;
-  `.venv/bin/python -m compileall -q src`; seeded loop smoke run for seeds 1,
-  42, and 2026.
-- Result: Targeted tests `24 passed`; full suite `109 passed`; compilation exit
-  0; seeded runs reproducible; verification `PASS`; specification compliance
-  `COMPLIANT`. Independent critical-phase reviews found and drove corrections
-  for render ordering, final rendering, premature outcome status, anti-cheat
-  coverage, and overclaimed final-statistics traceability.
+- Last completed phase: FASE 8 — Memory.
+- Completed acceptance criteria: Added `AgentMemory` with known position and
+  direction, visited rooms, chronological perception history, historically
+  perceived gold rooms, traveled path, executed actions, observed score, and
+  collected-gold count. Integrated it into the temporary agent through only
+  `AgentObservation` and `ActionResult`, including transient `bump` and `scream`.
+- Remaining acceptance criteria: None for FASE 8. Derived safe/unknown/frontier
+  and hazard knowledge remains intentionally assigned to FASE 9.
+- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_memory.py
+  -q`; `.venv/bin/python -m pytest tests/unit/test_simple_agent.py
+  tests/unit/test_engine.py tests/unit/test_memory.py -q`; `.venv/bin/python -m
+  pytest -q`; `.venv/bin/python -m compileall -q src`.
+- Result: Targeted tests `7 passed`; affected tests `31 passed`; full suite
+  `116 passed`; compilation exit 0; verification `PASS`; specification compliance
+  `COMPLIANT`.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
-  directory; only the three required state files are checkpointed from it.
+  directory; only required state files are checkpointed from it.
 
 ## Files changed in current phase
 
 - `src/wumpus/agent/__init__.py`
+- `src/wumpus/agent/memory.py`
 - `src/wumpus/agent/simple_agent.py`
-- `src/wumpus/domain/__init__.py`
-- `src/wumpus/domain/observation.py`
-- `src/wumpus/environment/generator.py`
-- `src/wumpus/environment/world.py`
-- `src/wumpus/game/__init__.py`
-- `src/wumpus/game/config.py`
-- `src/wumpus/game/engine.py`
-- `tests/unit/test_engine.py`
-- `tests/unit/test_simple_agent.py`
+- `tests/unit/test_memory.py`
 - `.specs/implementation-status.md`
-- `.specs/decisions.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 60: `GameEngine.step` runs the exact plan loop and exposes an
-  optional pre-decision render hook; `GameEngine.run` invokes the final render
-  hook after the terminal outcome, keeping rendering outside engine rules.
-- Sections 57 and 58: `AgentObservation` carries only position, direction,
-  perception, score, collected gold, and active state; the agent layer has no
-  reference to `World` or the real map.
-- Section 26: the loop stops on escape from `[1,1]` and on death.
-- Sections 105 and 124: the loop is bounded by `MAX_TURNS = 2000` and finishes
-  with `TURN_LIMIT` instead of running forever.
-- Sections 119 FASE 7, 125, and 126: the temporary `SimpleAgent` makes the game
-  work mechanically and stays deterministic under an injected `random.Random`.
+- Section 31: `AgentMemory` retains the observable episodic state needed before
+  knowledge inference: current pose, visits, perceptions, gold facts, path,
+  actions, score, and inventory count.
+- Sections 57–59 and 123–124: memory consumes only the reduced observation and
+  action-result DTOs; the agent package still has no environment or hidden-map
+  dependency.
+- Section 119 FASE 8: the running agent now remembers observations and action
+  results without implementing the derived knowledge assigned to FASE 9.
 
 ## Current blockers
 
@@ -108,8 +96,10 @@ rename, merge, or reorder phases.
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- `SimpleAgent` is intentionally non-intelligent and has no memory, inference,
-  planning, or risk evaluation; FASE 8 onwards replaces it.
+- `SimpleAgent` remains intentionally non-intelligent; it now has episodic
+  memory but no inference, planning, or risk evaluation.
+- `AgentMemory` records only the final position observable after a bat chain;
+  hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
   shooting count, exploration percentage, and seed are deferred to the later
   statistics/UI/CLI work. FASE 7 exposes only the terminal engine data it can
@@ -119,8 +109,8 @@ rename, merge, or reorder phases.
 
 ## Next action
 
-Begin FASE 8 — Memory by implementing the agent memory of visited rooms and
-perception history, without advanced inference.
+Begin FASE 9 — Knowledge Base by implementing safe, visited, unknown, frontier,
+possible/confirmed hazards, negative knowledge, and the independent logical map.
 
 ## Checkpoint update contract
 
@@ -142,6 +132,6 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 7 — Engine verified after focused tests, full regression,
-source compilation, seeded loop reproduction, architecture verification, and
-specification compliance.
+2026-09-24 — FASE 8 — Memory verified after focused and affected tests, full
+regression, source compilation, anti-cheat verification, and specification
+compliance.
