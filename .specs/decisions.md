@@ -93,6 +93,52 @@ Evidence:
 Sections 7, 34–38, 74, and 119 FASE 10; user authorization on 2026-09-24;
 `tests/unit/test_inference.py`.
 
+## DEC-004 — Priority 5 fires whenever exploration stalls, without a route-blocking proof
+
+Date: 2026-09-24
+Status: ACCEPTED
+Affected phase(s): FASE 13 — Wumpus hunting
+
+Context:
+Section 44 priority 5 says to shoot a confirmed Wumpus "caso ele bloqueie
+rota útil" (if it blocks a useful route), but the plan gives no algorithm
+for proving that a specific confirmed Wumpus is the reason no safe route
+remains, as opposed to an unrelated unconfirmed hazard or an unreachable
+region being the real obstruction.
+
+Decision:
+`Strategy._hunt` (priority 5) fires whenever priorities 3-4 find no
+reachable, unvisited safe cell (`unexplored` is empty), without separately
+proving that the specific confirmed Wumpus it targets is what is blocking
+progress.
+
+Reason:
+Priority 5 is only ever reached after priorities 3-4 have already searched
+exhaustively for a safe route and found none; by that point, some obstacle
+is preventing further safe progress, and a confirmed live Wumpus is one of
+the few knowable obstacles the agent can act on without FASE 14's risk
+engine. Building a precise "would killing this Wumpus specifically reopen a
+route" proof would require frontier/connectivity reasoning that belongs to
+FASE 14 and is not yet implemented; the alternative (never shooting without
+that proof) would leave a confirmed, capturable Wumpus blocking exploration
+indefinitely with no path to resolution.
+
+Consequences:
+The agent may occasionally spend an arrow (-10, section 21) on a confirmed
+Wumpus that is not actually the sole obstruction (e.g., the true blocker is
+an unconfirmed possible pit elsewhere). This trades a bounded, known cost
+for guaranteed forward progress and is consistent with the project's
+soundness-first posture elsewhere (DEC-003): the agent never asserts false
+hazard knowledge, it just does not yet reason about which confirmed hazard
+is "the" blocker. FASE 14 — Risk engine may tighten this once
+frontier/connectivity reasoning exists.
+
+Evidence:
+Section 44 priority 5; `src/wumpus/agent/strategy.py::Strategy._hunt`;
+`tests/unit/test_strategy.py` hunting tests; independent specification
+review on 2026-09-24 (flagged as MEDIUM, accepted as a defensible
+simplification pending FASE 14).
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

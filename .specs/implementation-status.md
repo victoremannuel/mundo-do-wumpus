@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 12 — Strategy (`VERIFIED`)
+FASE 13 — Wumpus hunting (`VERIFIED`)
 
 ## Phase ledger
 
@@ -33,7 +33,7 @@ rename, merge, or reorder phases.
 | FASE 10 — Inference Engine | `VERIFIED` | `18 passed` targeted; `64 passed` affected; `149 passed` full; `compileall`, determinism, and anti-cheat checks passed; independent logic/specification audits `COMPLIANT`. |
 | FASE 11 — Planner | `VERIFIED` | `10 passed` targeted; `18 passed` affected (`test_simple_agent.py`); `159 passed` full; `compileall` passed; specification and logic audits `COMPLIANT`. |
 | FASE 12 — Strategy | `VERIFIED` | `11 passed` targeted; `44 passed` affected; `170 passed` full; `compileall` passed; 80-seed real-map stress run with no crash; independent specification and logic audits `COMPLIANT` after a confirmed reachability bug was fixed. |
-| FASE 13 — Wumpus hunting | `NOT_STARTED` | — |
+| FASE 13 — Wumpus hunting | `VERIFIED` | `18 passed` (`test_strategy.py`); `19 passed` (`test_inference.py`); `9 passed` (`test_memory.py`); `179 passed` full; `compileall` passed; 2000-seed real-map stress run with 0 crashes and 0 unsound kill attributions; independent specification and logic audits `COMPLIANT` after fixing two confirmed defects (an inference false-confirmation regression and an unsound kill-attribution gap). |
 | FASE 14 — Risk engine | `NOT_STARTED` | — |
 | FASE 15 — Política de saída | `NOT_STARTED` | — |
 | FASE 16 — UI | `NOT_STARTED` | — |
@@ -49,40 +49,42 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 12 — Strategy.
-- Completed acceptance criteria: Implemented the priority-1-to-4 decision
-  hierarchy (grab gold, climb/return once no safe frontier remains while
-  carrying gold, otherwise route to the nearest reachable unvisited safe
-  cell), wired `find_path`/`plan_actions` into `SimpleAgent` through a
-  persisted `deque[Action]` plan cache that survives across turns and is
-  invalidated only by a position/expected-path mismatch (covers bumps and
-  bat teleports without special-casing either), and a reachability-aware
-  target search that tries unexplored candidates nearest-first instead of
-  giving up on the first (possibly disconnected) pick.
-- Remaining acceptance criteria: None for FASE 12. Priority 5 (shooting a
-  confirmed Wumpus) requires FASE 13's alignment/firing mechanics; priorities
-  6-7 (least-risk fallback, forced return under excessive risk) require
-  FASE 14's Risk engine. `Strategy.decide` returns `None` when no priority in
-  this phase applies, and `SimpleAgent` keeps its pre-existing bounded random
-  fallback for that case, documented below.
-- Last verified commands: `.venv/bin/python -m pytest
-  tests/unit/test_strategy.py -q`; `.venv/bin/python -m pytest
-  tests/unit/test_strategy.py tests/unit/test_simple_agent.py
-  tests/unit/test_planner.py tests/unit/test_engine.py -q`;
-  `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`;
-  an 80-seed stress sweep over the real `MapGenerator`/`World`/`GameEngine`
-  loop checking for exceptions or hangs.
-- Result: Targeted tests `11 passed`; affected tests `44 passed`; full suite
-  `170 passed`; compilation exit 0; 80-seed stress run completed every game
-  (53 `ESCAPED`, 27 `DEAD` — deaths are expected since risk avoidance and
-  Wumpus hunting are still deferred) with no crash or hang. Independent logic
-  review found one CONFIRMED bug (nearest-by-raw-distance target selection
-  had no reachability check, so an unreachable-but-nearer safe cell — e.g.
-  across a bat-teleport gap — could permanently starve exploration); fixed by
-  trying candidates nearest-first with a `find_path` reachability check per
-  candidate, with a regression test added. Independent specification review
-  confirmed `COMPLIANT` after this checkpoint records the phase in the state
-  files.
+- Last completed phase: FASE 13 — Wumpus hunting.
+- Completed acceptance criteria: Implemented priority 5 (shoot a confirmed
+  Wumpus once priorities 1-4 find nothing) with alignment-seeking when not
+  already sharing a row/column, and `Strategy.confirm_kill` to reconcile
+  knowledge after a `SHOOT` result per section 56. Fixed two real defects
+  found via stress-testing against generated maps (not visible from static
+  reasoning alone): (1) a FASE 10 `InferenceEngine` false-confirmation bug,
+  where a historical stench reading whose explaining Wumpus later died could
+  get wrongly reassigned by elimination to an unrelated neighbor; (2) an
+  unsound `confirm_kill` attribution gap, where a cell the agent had simply
+  never gathered evidence about (neither confirmed, possible, nor proven
+  Wumpus-free) was wrongly treated as proof of absence, risking a live
+  Wumpus being marked dead and safe.
+- Remaining acceptance criteria: None for FASE 13. Priorities 6-7
+  (least-risk fallback, forced return under excessive risk) still require
+  FASE 14's Risk engine; `Strategy.decide` returns `None` when no priority
+  through 5 applies, and `SimpleAgent` keeps its bounded random fallback.
+- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_strategy.py
+  tests/unit/test_inference.py tests/unit/test_memory.py
+  tests/unit/test_knowledge.py -q`; `.venv/bin/python -m pytest -q`;
+  `.venv/bin/python -m compileall -q src`; a 2000-seed stress sweep over the
+  real `MapGenerator`/`World`/`GameEngine` loop, checking both for exceptions
+  and for `agent.memory.knowledge.dead_wumpus` never containing a cell the
+  real `World` still counts alive (soundness, not just crash-freedom).
+- Result: `test_strategy.py` 18 passed; `test_inference.py` 19 passed;
+  `test_memory.py` 9 passed; full suite `179 passed`; compilation exit 0;
+  2000-seed stress run: 0 crashes, 0 unsound kill attributions (1534
+  `ESCAPED`, 465 `DEAD`, 1 `TURN_LIMIT` — deaths and turn limits are expected
+  since risk avoidance, FASE 14, is still deferred). Independent logic review
+  found one CRITICAL bug (the `confirm_kill` attribution gap above) and
+  independent specification review found one MEDIUM item (priority 5 does
+  not prove the targeted Wumpus is the actual route blocker, recorded as
+  `DEC-004`) and one LOW item (a duplicated direction-delta table, now
+  consolidated into `planner.FORWARD_DELTA`). Both the CRITICAL and LOW
+  items were fixed; specification review confirmed `COMPLIANT` after this
+  checkpoint records the phase in the state files.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -92,41 +94,46 @@ rename, merge, or reorder phases.
 
 - `src/wumpus/agent/strategy.py`
 - `src/wumpus/agent/simple_agent.py`
+- `src/wumpus/agent/inference.py`
+- `src/wumpus/agent/planner.py`
 - `src/wumpus/agent/__init__.py`
 - `tests/unit/test_strategy.py`
-- `tests/unit/test_simple_agent.py`
+- `tests/unit/test_inference.py`
 - `tests/unit/test_memory.py`
+- `.specs/decisions.md`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 44 priorities 1-4: `Strategy.decide` checks glitter (GRAB), then
-  the literal section 45 exit condition (gold and no safe frontier: CLIMB at
-  start, otherwise route toward it), then routes to the nearest reachable
-  unvisited safe cell.
-- Section 45 (minimal literal exit condition only): `collected_gold > 0 and
-  not unexplored`, without inventing the fuller multi-factor utility policy
-  section 45/46 describe as optional and out of this phase's scope.
-- Sections 51-52: the FASE 11 `deque[Action]` plan is cached across
-  `decide()` calls and consumed one action per cycle; it is discarded and
-  recomputed when the observed position no longer matches the plan's
-  expected current cell (covers unexpected bumps and bat teleports) or when
-  the pursued target is no longer a valid candidate.
-- Section 99/49 corollary: candidate targets are only ever cells in
-  `knowledge.safe`, and unreachable candidates (safe but not yet connected
-  through other safe cells) are skipped in favor of the next-nearest
-  reachable one rather than stalling the agent.
-- Section 100: `test_strategy_grabs_gold_regardless_of_the_safe_frontier`
-  confirms GRAB fires independently of frontier state.
-- Section 101: `test_strategy_heads_toward_the_start_with_gold_and_no_safe_frontier`
-  and `SimpleAgent`'s existing exit-position test confirm the agent routes
-  toward `[1,1]` when carrying gold with no safe frontier left, elsewhere.
-- Sections 57–59: `strategy.py` imports only `wumpus.agent.knowledge`,
-  `wumpus.agent.planner`, `wumpus.domain`, and `wumpus.game.config`; it never
-  imports `wumpus.environment` or references hidden map/World state,
-  verified by the existing AST boundary test (now covering `strategy.py`
-  automatically).
+- Section 54: `Strategy._hunt` reads only `knowledge.confirmed_wumpus`, never
+  `possible_wumpus`; a merely-suspected Wumpus never triggers a shot
+  (`test_strategy_does_not_shoot_a_merely_possible_wumpus`).
+- Section 55: firing requires `position.row == wumpus.row or position.col ==
+  wumpus.col`; when unaligned, the agent routes to the nearest reachable
+  `knowledge.safe` cell sharing that row/column before firing
+  (`test_strategy_routes_to_an_alignment_cell_before_shooting`).
+- Section 56: `Strategy.confirm_kill` registers the death
+  (`knowledge.mark_wumpus_dead`), recomputes potential stench going forward
+  (via the `InferenceEngine` fix, so old stench explained by the now-dead
+  Wumpus is never reassigned), and updates the safety of the newly-dead cell
+  (which becomes `safe` once every hazard type is ruled out there, per the
+  pre-existing `mark_wumpus_dead` transition) -- but only when the shot's
+  outcome is actually *determinable*: every cell strictly closer along the
+  line of fire must already be proven `not_wumpus`, otherwise the kill is
+  left unattributed rather than guessed
+  (`test_strategy_confirm_kill_does_not_attribute_through_an_unclassified_cell`).
+- Section 44 priority 5: fires only after priorities 1-4 find no reachable
+  unexplored safe cell, per `DEC-004`'s documented interpretation of
+  "bloqueie rota útil".
+- Section 21 (arrow cost/no limit): unaffected, already `VERIFIED` in FASE 5;
+  `Strategy` only ever issues `Action.SHOOT`, cost/scoring remain centralized
+  in `wumpus/environment/scoring.py`.
+- Sections 57–59: `strategy.py` still imports only `wumpus.agent.knowledge`,
+  `wumpus.agent.planner`, `wumpus.domain`, and `wumpus.game.config`; the line
+  of fire is walked using `knowledge.all_cells` and the `ActionResult` DTO
+  only, never `wumpus.environment` or hidden map/World state, verified by
+  the existing AST boundary test.
 
 ## Current blockers
 
@@ -135,35 +142,38 @@ rename, merge, or reorder phases.
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- Priority 5 (shoot a confirmed Wumpus blocking a useful route) is not
-  implemented; it requires FASE 13's alignment and firing mechanics.
+- Priority 5 does not prove the targeted confirmed Wumpus is the actual
+  obstruction blocking further safe exploration (accepted trade-off,
+  `DEC-004`); a future FASE 14 frontier/connectivity check could tighten
+  this once risk-based reasoning exists.
+- `confirm_kill`'s soundness-first attribution rule means many kills go
+  unattributed in practice on larger, less-explored maps (a cell strictly
+  closer on the line of fire is often still unclassified) -- the agent then
+  keeps treating that Wumpus as confirmed-alive and simply stops trying to
+  shoot it again until new information arrives; this is intentional
+  (sound-but-incomplete) rather than a defect.
 - Priorities 6-7 (least-risk fallback, forced return under excessive risk)
   are not implemented; they require FASE 14's Risk engine. Until then,
   `SimpleAgent` falls back to bounded random movement whenever `Strategy`
-  finds no known-safe target, which can lead to death on generated maps with
-  hazards — expected and out of this phase's scope.
+  finds no known-safe target and no confirmed, shootable Wumpus, which can
+  lead to death on generated maps with hazards -- expected and out of this
+  phase's scope.
 - Section 45/46's fuller utility-based exit policy (probabilistic cost model,
-  risk tolerance before/after gold) is deferred to FASE 15 — Política de
-  saída; FASE 12 implements only the literal minimal exit condition the plan
-  gives as a FASE-12 test case (section 101).
+  risk tolerance before/after gold) remains deferred to FASE 15.
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
   shooting count, exploration percentage, and seed are deferred to the later
-  statistics/UI/CLI work. FASE 7 exposes only the terminal engine data it can
-  already prove and does not claim those sections as verified.
+  statistics/UI/CLI work.
 - Console rendering, debug map, and the CLI remain unimplemented until FASE 16
   to FASE 18; the engine exposes `on_render` and `on_render_final` hooks for them.
-- When FASE 13 adds shooting, it must reconcile historical stench constraints
-  and call the existing dead-Wumpus knowledge transition after a scream/kill.
 
 ## Next action
 
-Begin FASE 13 — Wumpus hunting by implementing confirmation-driven alignment,
-firing, and replanning: when a confirmed Wumpus blocks the only useful route,
-align toward it, SHOOT, and reconcile historical stench constraints plus the
-existing dead-Wumpus knowledge transition after a scream/kill, feeding the
-result back into `Strategy`'s priority 5.
+Begin FASE 14 — Risk engine by implementing least-risk cell evaluation
+(priority 6) for when no safe exploration or shootable confirmed Wumpus
+remains, and a forced-return trigger (priority 7) when expected risk is
+excessive, replacing `SimpleAgent`'s bounded random fallback.
 
 ## Checkpoint update contract
 
@@ -185,8 +195,8 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 12 — Strategy verified: priority 1-4 decision hierarchy
-wired into `SimpleAgent` via the FASE 11 planner, targeted/affected/full
-tests, compilation, an 80-seed real-map stress run, and independent logic/
-specification reviews after fixing a confirmed reachability bug in target
-selection.
+2026-09-25 — FASE 13 — Wumpus hunting verified: priority 5 (confirmation,
+alignment, firing) added to `Strategy`, a real FASE 10 inference
+false-confirmation bug and an unsound kill-attribution gap fixed after
+independent review, targeted/full tests, compilation, and a 2000-seed
+real-map stress run with 0 crashes and 0 unsound attributions.

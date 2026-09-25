@@ -91,6 +91,8 @@ class InferenceEngine:
             for hazard in HAZARD_TYPES:
                 if not self._signal(perception, hazard):
                     continue
+                if self._explained_by_dead_wumpus(source, hazard):
+                    continue
                 candidates = self._constraint_candidates(source, hazard)
                 if self._confirmed(hazard).intersection(candidates):
                     continue
@@ -114,6 +116,8 @@ class InferenceEngine:
             for hazard in HAZARD_TYPES:
                 if not self._signal(perception, hazard):
                     continue
+                if self._explained_by_dead_wumpus(source, hazard):
+                    continue
                 candidates = self._constraint_candidates(source, hazard)
                 if self._confirmed(hazard).intersection(candidates):
                     continue
@@ -125,6 +129,25 @@ class InferenceEngine:
                             source,
                             (position,),
                         )
+
+    def _explained_by_dead_wumpus(self, source: Position, hazard: EntityType) -> bool:
+        """Return whether a past positive signal is already accounted for.
+
+        A live Wumpus always causes stench in every orthogonal neighbor, so
+        a historical stench reading remains true evidence even after that
+        Wumpus dies later in the game (`_observations` never discards past
+        perceptions). Once one neighbor of the source is a known dead
+        Wumpus, the signal is fully explained and must not be reassigned to
+        another, still-live neighbor through elimination -- that neighbor
+        may simply not exist.
+        """
+
+        if hazard is not EntityType.WUMPUS:
+            return False
+        return any(
+            position in self._knowledge.dead_wumpus
+            for position in self._neighbors(source)
+        )
 
     def _constraint_candidates(
         self,

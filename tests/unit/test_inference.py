@@ -193,3 +193,31 @@ def test_out_of_bounds_observations_are_rejected() -> None:
 
     with pytest.raises(ValueError):
         engine.observe(Position(7, 1), perception())
+
+
+def test_a_dead_wumpus_still_explains_its_historical_stench() -> None:
+    # (1,3)'s stench has two live candidates, (1,2) and (1,4). (1,2) gets
+    # independently confirmed through its own single-neighbor source at
+    # (1,1). Once (1,2) is later killed (FASE 13), (1,3)'s old stench
+    # reading must not be reassigned to (1,4) by elimination: a live Wumpus
+    # always causes stench in every neighbor, so the historical reading
+    # remains fully explained by the Wumpus that used to be at (1,2), even
+    # though it is dead now.
+    base = KnowledgeBase(1, 5)
+    engine = InferenceEngine(base)
+
+    engine.observe(Position(1, 3), perception(stench=True))
+    engine.observe(Position(1, 1), perception(stench=True))
+
+    assert base.confirmed_wumpus == frozenset({Position(1, 2)})
+    assert Position(1, 4) in base.possible_wumpus
+    assert Position(1, 4) not in base.confirmed_wumpus
+
+    assert base.mark_wumpus_dead(Position(1, 2))
+
+    # Any further observation re-runs the fixed point over every stored
+    # perception, including (1,3)'s stale stench reading.
+    engine.observe(Position(1, 5), perception())
+
+    assert Position(1, 4) not in base.confirmed_wumpus
+    assert Position(1, 2) in base.dead_wumpus

@@ -11,7 +11,7 @@ from wumpus.domain import (
     Position,
 )
 from wumpus.environment import GeneratedMap, World
-from wumpus.game import GameEngine, GameStatus
+from wumpus.game import GameConfig, GameEngine, GameStatus
 
 
 NO_PERCEPTION = Perception(
@@ -230,6 +230,31 @@ def test_simple_agent_memory_is_updated_by_the_real_game_loop() -> None:
     assert agent.memory.collected_gold == 1
     assert agent.memory.score == 946
     assert agent.memory.gold_seen == frozenset({Position(1, 1)})
+
+
+def test_simple_agent_shoots_a_wumpus_blocking_the_only_route_to_gold() -> None:
+    # A single-row corridor forces the only path to the gold through the
+    # Wumpus's cell. Its single neighbor ([1,1]) confirms it immediately by
+    # elimination, and FASE 13's priority 5 must align and fire on it before
+    # any further exploration is possible.
+    config = GameConfig(rows=1, cols=4, wumpus_count=1, pit_count=0, gold_count=1, bat_count=0)
+    world = World(
+        GeneratedMap(
+            rows=1,
+            cols=4,
+            entities={Position(1, 2): EntityType.WUMPUS, Position(1, 4): EntityType.GOLD},
+        ),
+        rng=random.Random(0),
+    )
+    agent = SimpleAgent(random.Random(0), config)
+
+    outcome = GameEngine(world, agent).run()
+
+    assert outcome.status is GameStatus.ESCAPED
+    assert Position(1, 2) in agent.memory.knowledge.dead_wumpus
+    assert Action.SHOOT in agent.memory.actions
+    assert agent.memory.actions[agent.memory.actions.index(Action.SHOOT) - 1] is Action.TURN_RIGHT
+    assert agent.memory.collected_gold == 1
 
 
 def test_simple_agent_inference_updates_knowledge_from_reduced_observations() -> None:

@@ -1,6 +1,33 @@
+from collections import deque
+
 from wumpus.agent import KnowledgeBase, Strategy
-from wumpus.domain import Action, Direction, EntityType, Position
+from wumpus.domain import Action, ActionResult, Direction, EntityType, Perception, Position
 from wumpus.game.config import START_POSITION
+
+
+def shot_result(
+    *,
+    position: Position,
+    direction: Direction,
+    wumpus_killed: bool,
+    scream: bool,
+) -> ActionResult:
+    return ActionResult(
+        action=Action.SHOOT,
+        position=position,
+        direction=direction,
+        score_delta=-10,
+        total_score=-10,
+        perception=Perception(
+            stench=False,
+            breeze=False,
+            bat_noise=False,
+            glitter=False,
+            bump=False,
+            scream=scream,
+        ),
+        wumpus_killed=wumpus_killed,
+    )
 
 
 def safe_knowledge(rows: int, cols: int, safe_cells: list[Position]) -> KnowledgeBase:
@@ -244,3 +271,168 @@ def test_strategy_ignores_unsafe_cells_when_no_frontier_is_reachable() -> None:
     )
 
     assert action is None
+
+
+def test_strategy_shoots_a_confirmed_wumpus_once_already_aligned() -> None:
+    knowledge = safe_knowledge(3, 3, [Position(1, 1)])
+    knowledge.mark_confirmed(Position(1, 3), EntityType.WUMPUS)
+    strategy = Strategy()
+
+    first = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+    # Simulate the turn from `first` having been applied by the environment.
+    second = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.EAST,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert first is Action.TURN_RIGHT
+    assert second is Action.SHOOT
+
+
+def test_strategy_does_not_shoot_a_merely_possible_wumpus() -> None:
+    knowledge = safe_knowledge(3, 3, [Position(1, 1)])
+    knowledge.mark_possible(Position(1, 3), EntityType.WUMPUS)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert action is None
+
+
+def test_strategy_routes_to_an_alignment_cell_before_shooting() -> None:
+    # (1,2) and (1,3) are already explored (no longer a "frontier"), but
+    # (1,3) shares a column with the Wumpus at (3,3), so it is a valid
+    # firing position even though the agent starts unaligned.
+    knowledge = safe_knowledge(3, 3, [Position(1, 1), Position(1, 2), Position(1, 3)])
+    knowledge.mark_confirmed(Position(3, 3), EntityType.WUMPUS)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert action is not None
+    assert action is not Action.SHOOT
+    assert strategy._target == Position(1, 3)
+
+
+def test_strategy_confirm_kill_marks_the_targeted_wumpus_dead() -> None:
+    knowledge = KnowledgeBase(3, 3)
+    knowledge.mark_visited(Position(1, 1))
+    knowledge.mark_safe(Position(1, 1))
+    # The cell between the shooter and the target must be *proven*
+    # Wumpus-free, not merely unclassified, for attribution to be sound.
+    knowledge.mark_not(Position(1, 2), EntityType.WUMPUS)
+    knowledge.mark_confirmed(Position(1, 3), EntityType.WUMPUS)
+    strategy = Strategy()
+    strategy._target = Position(1, 3)
+
+    strategy.confirm_kill(
+        knowledge,
+        shot_result(
+            position=Position(1, 1),
+            direction=Direction.EAST,
+            wumpus_killed=True,
+            scream=True,
+        ),
+    )
+
+    assert Position(1, 3) in knowledge.dead_wumpus
+    assert Position(1, 3) not in knowledge.confirmed_wumpus
+    assert strategy._target is None
+
+
+def test_strategy_confirm_kill_leaves_an_ambiguous_kill_unresolved() -> None:
+    # A closer, merely possible Wumpus candidate sits between the shooter
+    # and the confirmed target on the same line: the agent's own knowledge
+    # cannot tell which one the arrow actually hit.
+    knowledge = KnowledgeBase(5, 1)
+    knowledge.mark_visited(Position(1, 1))
+    knowledge.mark_safe(Position(1, 1))
+    knowledge.mark_confirmed(Position(4, 1), EntityType.WUMPUS)
+    knowledge.mark_possible(Position(2, 1), EntityType.WUMPUS)
+    strategy = Strategy()
+    strategy._target = Position(4, 1)
+
+    strategy.confirm_kill(
+        knowledge,
+        shot_result(
+            position=Position(1, 1),
+            direction=Direction.NORTH,
+            wumpus_killed=True,
+            scream=True,
+        ),
+    )
+
+    assert Position(4, 1) not in knowledge.dead_wumpus
+    assert Position(4, 1) in knowledge.confirmed_wumpus
+
+
+def test_strategy_confirm_kill_clears_the_cache_even_on_a_miss() -> None:
+    knowledge = KnowledgeBase(3, 3)
+    strategy = Strategy()
+    strategy._target = Position(1, 3)
+    strategy._path = [Position(1, 1)]
+    strategy._actions = deque([Action.SHOOT])
+
+    strategy.confirm_kill(
+        knowledge,
+        shot_result(
+            position=Position(1, 1),
+            direction=Direction.EAST,
+            wumpus_killed=False,
+            scream=False,
+        ),
+    )
+
+    assert strategy._target is None
+    assert strategy._path == []
+    assert strategy._actions == deque()
+
+
+def test_strategy_confirm_kill_does_not_attribute_through_an_unclassified_cell() -> None:
+    # An unvisited cell the agent has never gathered evidence about is not
+    # proof it is empty. The real environment stops at the first LIVE
+    # Wumpus regardless of what the agent knows, so an undiscovered Wumpus
+    # could legitimately be hiding in that unclassified cell and be the one
+    # that actually died -- attributing the kill to the farther, confirmed
+    # target would then falsely mark a still-alive Wumpus as dead and safe.
+    knowledge = KnowledgeBase(5, 1)
+    knowledge.mark_visited(Position(1, 1))
+    knowledge.mark_safe(Position(1, 1))
+    knowledge.mark_confirmed(Position(4, 1), EntityType.WUMPUS)
+    # Position(2, 1) and Position(3, 1) are left fully unclassified.
+    strategy = Strategy()
+    strategy._target = Position(4, 1)
+
+    strategy.confirm_kill(
+        knowledge,
+        shot_result(
+            position=Position(1, 1),
+            direction=Direction.NORTH,
+            wumpus_killed=True,
+            scream=True,
+        ),
+    )
+
+    assert Position(4, 1) not in knowledge.dead_wumpus
+    assert Position(4, 1) in knowledge.confirmed_wumpus

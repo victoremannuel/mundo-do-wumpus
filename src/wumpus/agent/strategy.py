@@ -1,18 +1,20 @@
 """Fixed decision hierarchy consuming agent-owned knowledge and the planner.
 
-Implements plan section 44's priorities 1-4:
+Implements plan section 44's priorities 1-5:
 
 1. Grab visible gold.
 2. Climb at the start cell once holding gold with no safe frontier left, or
    route back toward the start cell first when elsewhere.
 3/4. Route toward the nearest reachable, unvisited safe cell.
+5. Shoot a confirmed Wumpus once no safe exploration remains (section 54:
+   only ever a confirmed Wumpus, never mere suspicion): align directly when
+   already sharing a row or column with it (section 55), otherwise route to
+   the nearest reachable safe cell that would share one.
 
-Priority 5 (shoot a confirmed Wumpus blocking a useful route) requires the
-alignment and firing mechanics built in FASE 13 — Wumpus hunting. Priorities
-6-7 (least-risk fallback and forced return under excessive risk) require the
-FASE 14 — Risk engine. Both are intentionally out of scope here; `decide`
-returns ``None`` when no priority in this phase applies, and the caller
-supplies its own temporary fallback until those phases exist.
+Priorities 6-7 (least-risk fallback and forced return under excessive risk)
+require the FASE 14 — Risk engine and are intentionally out of scope here;
+`decide` returns ``None`` when no priority in this phase applies, and the
+caller supplies its own temporary fallback until that phase exists.
 """
 
 from __future__ import annotations
@@ -20,8 +22,8 @@ from __future__ import annotations
 from collections import deque
 
 from wumpus.agent.knowledge import KnowledgeBase
-from wumpus.agent.planner import find_path, plan_actions
-from wumpus.domain import Action, Direction, Position
+from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
+from wumpus.domain import Action, ActionResult, Direction, Position
 from wumpus.game.config import START_POSITION
 
 
@@ -63,8 +65,106 @@ class Strategy:
             )
             return self._pursue(knowledge, position, direction, candidates)
 
+        action = self._hunt(knowledge, position, direction)
+        if action is not None:
+            return action
+
         self._clear()
         return None
+
+    def confirm_kill(self, knowledge: KnowledgeBase, result: ActionResult) -> None:
+        """Reconcile knowledge after a `SHOOT` result (plan section 56).
+
+        Clears the firing plan unconditionally -- a shot is new information
+        either way. When it killed a Wumpus, the death is only attributed to
+        this strategy's own confirmed target if every cell strictly closer
+        along the exact line of fire is already *proven* Wumpus-free
+        (`knowledge.not_wumpus`). A cell the agent has simply never gathered
+        evidence about is not proof of absence -- the real arrow could have
+        struck an undiscovered Wumpus hiding there instead, since the real
+        environment stops at the first *live* Wumpus regardless of what the
+        agent has or has not observed. Otherwise which Wumpus died cannot be
+        determined from the agent's own knowledge, and no unproven cell is
+        marked dead.
+        """
+
+        target = self._target
+        self._clear()
+        if not result.wumpus_killed or target is None:
+            return
+
+        for cell in self._line_of_fire(knowledge, result.position, result.direction):
+            if cell == target:
+                knowledge.mark_wumpus_dead(target)
+                return
+            if cell not in knowledge.not_wumpus:
+                return
+
+    def _hunt(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+    ) -> Action | None:
+        """Priority 5: shoot a confirmed Wumpus once no safer option remains."""
+
+        live_wumpus = sorted(
+            knowledge.confirmed_wumpus,
+            key=lambda cell: (position.manhattan_distance(cell), cell),
+        )
+        for wumpus in live_wumpus:
+            if position.row == wumpus.row or position.col == wumpus.col:
+                return self._fire_at(position, direction, wumpus)
+
+            alignment_cells = sorted(
+                (
+                    cell
+                    for cell in knowledge.safe
+                    if cell.row == wumpus.row or cell.col == wumpus.col
+                ),
+                key=lambda cell: (position.manhattan_distance(cell), cell),
+            )
+            if not alignment_cells:
+                continue
+            action = self._pursue(knowledge, position, direction, alignment_cells)
+            if action is not None:
+                return action
+
+        return None
+
+    def _fire_at(
+        self,
+        position: Position,
+        direction: Direction,
+        wumpus: Position,
+    ) -> Action | None:
+        if not self._is_plan_valid(wumpus, position):
+            required = self._direction_towards(position, wumpus)
+            self._target = wumpus
+            self._path = [position]
+            self._actions = deque(turns_to_face(direction, required))
+            self._actions.append(Action.SHOOT)
+        return self._advance()
+
+    @staticmethod
+    def _direction_towards(position: Position, target: Position) -> Direction:
+        if position.row == target.row:
+            return Direction.EAST if target.col > position.col else Direction.WEST
+        return Direction.NORTH if target.row > position.row else Direction.SOUTH
+
+    @staticmethod
+    def _line_of_fire(
+        knowledge: KnowledgeBase,
+        origin: Position,
+        direction: Direction,
+    ) -> tuple[Position, ...]:
+        row_step, col_step = FORWARD_DELTA[direction]
+        cells: list[Position] = []
+        cell = Position(origin.row + row_step, origin.col + col_step)
+        while cell in knowledge.all_cells:
+            cells.append(cell)
+            cell = Position(cell.row + row_step, cell.col + col_step)
+        return tuple(cells)
 
     def _pursue(
         self,

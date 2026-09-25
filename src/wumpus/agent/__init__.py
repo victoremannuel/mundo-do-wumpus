@@ -13,7 +13,7 @@ from wumpus.agent.knowledge import (
     KnowledgeConflictError,
 )
 from wumpus.agent.memory import AgentMemory, PerceptionRecord
-from wumpus.agent.planner import find_path, plan_actions
+from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
 from wumpus.agent.simple_agent import SimpleAgent
 from wumpus.agent.strategy import Strategy
 
@@ -30,6 +30,8 @@ __all__ = (
     "PerceptionRecord",
     "SimpleAgent",
     "Strategy",
+    "FORWARD_DELTA",
     "find_path",
     "plan_actions",
+    "turns_to_face",
 )

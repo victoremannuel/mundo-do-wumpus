@@ -18,12 +18,13 @@ _TURN_ACTIONS = (Action.TURN_LEFT, Action.TURN_RIGHT)
 
 
 class SimpleAgent:
-    """Update agent-owned knowledge, then apply the FASE 12 decision hierarchy.
+    """Update agent-owned knowledge, then apply the decision hierarchy.
 
-    Inference and planning use reduced observations only. When the strategy
-    finds no known-safe target (priorities 5-7: shooting, risk-based choice,
-    and forced return require FASE 13 and FASE 14), a bounded random fallback
-    keeps the agent moving without claiming those later priorities.
+    Inference, planning, and hunting use reduced observations only. When the
+    strategy finds no known-safe target and no confirmed Wumpus worth
+    shooting (priorities 6-7: risk-based choice and forced return require
+    FASE 14), a bounded random fallback keeps the agent moving without
+    claiming those later priorities.
     """
 
     def __init__(
@@ -82,6 +83,11 @@ class SimpleAgent:
         """Update the minimal internal state derived from the last result."""
 
         self._memory.record_result(result)
+        if result.action is Action.SHOOT:
+            # Reconcile the kill before inference sees the post-shot
+            # perception: a freshly dead Wumpus stops emitting stench, and
+            # inference must not find the now-safe cell still "confirmed".
+            self._strategy.confirm_kill(self._memory.knowledge, result)
         if not result.died:
             self._inference.observe(result.position, result.perception)
         self._blocked = result.perception.bump

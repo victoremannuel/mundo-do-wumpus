@@ -17,14 +17,14 @@ _RIGHT_TURN = {
 
 _LEFT_TURN = {result: source for source, result in _RIGHT_TURN.items()}
 
-_FORWARD_DELTA = {
+FORWARD_DELTA = {
     Direction.NORTH: (1, 0),
     Direction.EAST: (0, 1),
     Direction.SOUTH: (-1, 0),
     Direction.WEST: (0, -1),
 }
 
-_DELTA_TO_DIRECTION = {delta: direction for direction, delta in _FORWARD_DELTA.items()}
+_DELTA_TO_DIRECTION = {delta: direction for direction, delta in FORWARD_DELTA.items()}
 
 
 def find_path(
@@ -86,13 +86,15 @@ def plan_actions(path: list[Position], direction: Direction) -> deque[Action]:
             next_position.col - current.col,
         )
         required_direction = _DELTA_TO_DIRECTION[delta]
-        actions.extend(_turns_to_face(current_direction, required_direction))
+        actions.extend(turns_to_face(current_direction, required_direction))
         actions.append(Action.MOVE_FORWARD)
         current_direction = required_direction
     return actions
 
 
-def _turns_to_face(current: Direction, target: Direction) -> tuple[Action, ...]:
+def turns_to_face(current: Direction, target: Direction) -> tuple[Action, ...]:
+    """Return the 0-2 turn actions that reorient one facing onto another."""
+
     if current == target:
         return ()
     if _RIGHT_TURN[current] == target:
