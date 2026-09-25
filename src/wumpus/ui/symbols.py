@@ -42,3 +42,69 @@ PIT_SYMBOL = "P"
 BAT_SYMBOL = "B"
 GOLD_SYMBOL = "G"
 EMPTY_SYMBOL = "."
+
+
+# ---------------------------------------------------------------------------
+# Retro TUI palette (UI-RETRO-TUI-001).
+#
+# The legacy console palette above stays untouched; these entries extend the
+# same single source of truth with the darker, higher-contrast values the
+# persistent pixel-art interface needs. Color communicates state -- it is never
+# decoration.
+# ---------------------------------------------------------------------------
+
+RETRO_BACKGROUND = "#06080f"
+RETRO_PANEL_BACKGROUND = "#0a0e1a"
+RETRO_BORDER = "#3a4a6b"
+RETRO_BORDER_ACTIVE = "#5f7bb0"
+RETRO_TEXT = "#d7dce8"
+RETRO_TEXT_DIM = "#6b7893"
+RETRO_DEBUG = "#ff5fd2"
+
+RETRO_BORDER_STYLE = RETRO_BORDER
+RETRO_COORD_STYLE = RETRO_TEXT_DIM
+RETRO_LABEL_STYLE = RETRO_TEXT_DIM
+RETRO_VALUE_STYLE = f"bold {RETRO_TEXT}"
+
+RETRO_AGENT_STYLE = "bold bright_cyan"
+RETRO_SAFE_STYLE = "green"
+RETRO_VISITED_STYLE = "bright_green"
+RETRO_UNKNOWN_STYLE = "grey37"
+RETRO_RISK_STYLE = "yellow"
+RETRO_WUMPUS_STYLE = "bold magenta"
+RETRO_DEAD_WUMPUS_STYLE = "grey50"
+RETRO_PIT_STYLE = "bold red"
+RETRO_BAT_STYLE = "bold blue"
+RETRO_GOLD_STYLE = "bold bright_yellow"
+RETRO_EMPTY_STYLE = "grey30"
+
+RETRO_SENSOR_ON_STYLES = MappingProxyType(
+    {
+        "FEDOR": RETRO_WUMPUS_STYLE,
+        "BRISA": RETRO_PIT_STYLE,
+        "MORCEGO": RETRO_BAT_STYLE,
+        "BRILHO": RETRO_GOLD_STYLE,
+        "IMPACTO": RETRO_RISK_STYLE,
+        "GRITO": RETRO_AGENT_STYLE,
+    }
+)
+RETRO_SENSOR_OFF_STYLE = "grey30"
+
+RETRO_STATUS_STYLES = MappingProxyType(
+    {
+        "RUNNING": "bold bright_green",
+        "PAUSED": "bold yellow",
+        "FINISHED": "bold bright_cyan",
+        "ERROR": "bold red",
+    }
+)
+
+RETRO_OUTCOME_STYLES = MappingProxyType(
+    {
+        "ESCAPED": "bold bright_green",
+        "DEAD": "bold red",
+        "TURN_LIMIT": "bold yellow",
+    }
+)
+
+RETRO_SENSOR_INDICATOR = "●"

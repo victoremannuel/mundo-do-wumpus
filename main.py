@@ -6,6 +6,11 @@ Only this module is allowed to hold both the real `World` and the agent at
 once: it passes the world to the debug renderer for display, but the agent
 itself only ever receives `AgentObservation` through the engine's
 observe -> decide -> act -> learn cycle (sections 69-70).
+
+Two front ends share that assembly. `main()` launches the persistent retro
+Textual interface by default; `run()` keeps the original headless, scrolling
+console flow so tests, stress runs, and `--legacy-console` never need an
+interactive terminal.
 """
 
 from __future__ import annotations
@@ -26,9 +31,14 @@ from wumpus.domain import AgentObservation
 from wumpus.environment import MapGenerator, World
 from wumpus.game import GameConfig, GameEngine, GameOutcome, GameStatus
 from wumpus.ui.console import ConsoleRenderer
+from wumpus.ui.retro_state import (
+    DEFAULT_INTERVAL,
+    MAX_SPEED_INDEX,
+    SPEED_INTERVALS,
+)
 
 
-DEFAULT_DELAY = 0.5
+DEFAULT_DELAY = DEFAULT_INTERVAL
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -58,6 +68,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-delay",
         action="store_true",
         help="Executa sem atraso entre turnos",
+    )
+    parser.add_argument(
+        "--legacy-console",
+        action="store_true",
+        help="Usa o renderer de console original em vez da interface retro",
     )
     return parser.parse_args(argv)
 
@@ -113,5 +128,60 @@ def run(argv: list[str] | None = None) -> GameOutcome:
     return engine.run()
 
 
+def speed_index_for(delay: float, *, no_delay: bool) -> int:
+    """Map a requested delay onto the interface's discrete speed steps.
+
+    A Textual timer must never be given a zero interval: that starves the event
+    loop and the keyboard stops responding. `--no-delay` therefore selects the
+    fastest safe interval instead of no interval at all.
+    """
+
+    if no_delay:
+        return MAX_SPEED_INDEX
+    return min(
+        range(len(SPEED_INTERVALS)),
+        key=lambda index: abs(SPEED_INTERVALS[index] - delay),
+    )
+
+
+def run_tui(args: argparse.Namespace) -> GameOutcome | None:
+    """Run one game inside the persistent retro interface.
+
+    The world is assembled here, in the composition root, and only ever exposed
+    to the interface as agent-legal data: the first `AgentObservation` and, for
+    professor mode, an inert real-map view produced by the authorized debug
+    adapter. Reading that first observation before the engine exists is safe
+    because the transient bump/scream signals it consumes are still unset, so
+    the agent's own first observation is unchanged and the seed stays
+    reproducible.
+    """
+
+    from wumpus.debug.retro_renderer import build_real_map_view
+    from wumpus.ui.retro_app import RetroGameApp
+
+    world, agent = build_game(args.seed)
+    engine = GameEngine(world, agent)
+    app = RetroGameApp(
+        engine=engine,
+        agent=agent,
+        initial_observation=world.observation(),
+        seed=args.seed,
+        speed_index=speed_index_for(args.delay, no_delay=args.no_delay),
+        start_paused=args.step,
+        debug_enabled=args.debug,
+        debug_map_source=lambda: build_real_map_view(world.debug_snapshot()),
+    )
+    return app.run()
+
+
+def main(argv: list[str] | None = None) -> GameOutcome | None:
+    """Dispatch between the retro interface and the legacy console flow."""
+
+    args = parse_args(argv)
+    if args.legacy_console:
+        return run(argv)
+    return run_tui(args)
+
+
 if __name__ == "__main__":
-    run()
+    main()

@@ -1,0 +1,206 @@
+"""Pixel-art tile engine for the persistent retro terminal interface.
+
+Geometry is fixed and named: every logical room occupies exactly `TILE_HEIGHT`
+terminal lines by `TILE_WIDTH` terminal columns. Terminal cells are taller than
+they are wide, so a tile is deliberately wider than tall in order to read as a
+square room on screen.
+
+Sprites are pure presentation data. They carry no domain decisions, never read
+hidden world state, and are drawn only with block/box characters whose visual
+width is a single column in every terminal, so the map can never misalign.
+"""
+
+from __future__ import annotations
+
+from enum import Enum, auto
+from types import MappingProxyType
+
+from wumpus.domain import Direction
+from wumpus.ui.symbols import (
+    RETRO_AGENT_STYLE,
+    RETRO_BAT_STYLE,
+    RETRO_DEAD_WUMPUS_STYLE,
+    RETRO_EMPTY_STYLE,
+    RETRO_GOLD_STYLE,
+    RETRO_PIT_STYLE,
+    RETRO_RISK_STYLE,
+    RETRO_SAFE_STYLE,
+    RETRO_UNKNOWN_STYLE,
+    RETRO_VISITED_STYLE,
+    RETRO_WUMPUS_STYLE,
+)
+
+
+TILE_HEIGHT = 5
+TILE_WIDTH = 10
+
+
+class TileKind(Enum):
+    """What a single rendered room depicts, independent of why."""
+
+    UNKNOWN = auto()
+    SAFE = auto()
+    VISITED = auto()
+    RISK = auto()
+    WUMPUS = auto()
+    DEAD_WUMPUS = auto()
+    PIT = auto()
+    BAT = auto()
+    GOLD = auto()
+    EMPTY = auto()
+    AGENT = auto()
+
+
+_UNKNOWN_SPRITE = (
+    "░░░░░░░░░░",
+    "░▒░░░▒░░░░",
+    "░░░ ? ░░░░",
+    "░░▒░░░░░░░",
+    "░░░░░░░░░░",
+)
+
+_SAFE_SPRITE = (
+    "·        ·",
+    "          ",
+    "    ·     ",
+    "          ",
+    "·        ·",
+)
+
+_VISITED_SPRITE = (
+    "··········",
+    "·        ·",
+    "·   ··   ·",
+    "·        ·",
+    "··········",
+)
+
+_RISK_SPRITE = (
+    "    ██    ",
+    "   ████   ",
+    "    ██    ",
+    "          ",
+    "    ██    ",
+)
+
+_WUMPUS_SPRITE = (
+    " ██    ██ ",
+    " ████████ ",
+    " ██ ██ ██ ",
+    "  ██████  ",
+    "   █  █   ",
+)
+
+_PIT_SPRITE = (
+    "          ",
+    "  ░░░░░░  ",
+    " ▒▒▒▒▒▒▒▒ ",
+    " ████████ ",
+    "  ██████  ",
+)
+
+_BAT_SPRITE = (
+    "██      ██",
+    " ███  ███ ",
+    "  ██████  ",
+    "   ████   ",
+    "    ██    ",
+)
+
+_GOLD_SPRITE = (
+    "    ██    ",
+    "   ████   ",
+    "  ██████  ",
+    "   ████   ",
+    "    ██    ",
+)
+
+_EMPTY_SPRITE = (
+    "          ",
+    "          ",
+    "    ··    ",
+    "          ",
+    "          ",
+)
+
+_AGENT_SPRITES = MappingProxyType(
+    {
+        Direction.NORTH: (
+            "    ██    ",
+            "   ████   ",
+            "  ██████  ",
+            " ████████ ",
+            "   ████   ",
+        ),
+        Direction.SOUTH: (
+            "   ████   ",
+            " ████████ ",
+            "  ██████  ",
+            "   ████   ",
+            "    ██    ",
+        ),
+        Direction.EAST: (
+            " ██       ",
+            " ████     ",
+            " ████████ ",
+            " ████     ",
+            " ██       ",
+        ),
+        Direction.WEST: (
+            "       ██ ",
+            "     ████ ",
+            " ████████ ",
+            "     ████ ",
+            "       ██ ",
+        ),
+    }
+)
+
+_SPRITES = MappingProxyType(
+    {
+        TileKind.UNKNOWN: _UNKNOWN_SPRITE,
+        TileKind.SAFE: _SAFE_SPRITE,
+        TileKind.VISITED: _VISITED_SPRITE,
+        TileKind.RISK: _RISK_SPRITE,
+        TileKind.WUMPUS: _WUMPUS_SPRITE,
+        TileKind.DEAD_WUMPUS: _WUMPUS_SPRITE,
+        TileKind.PIT: _PIT_SPRITE,
+        TileKind.BAT: _BAT_SPRITE,
+        TileKind.GOLD: _GOLD_SPRITE,
+        TileKind.EMPTY: _EMPTY_SPRITE,
+    }
+)
+
+TILE_STYLES = MappingProxyType(
+    {
+        TileKind.UNKNOWN: RETRO_UNKNOWN_STYLE,
+        TileKind.SAFE: RETRO_SAFE_STYLE,
+        TileKind.VISITED: RETRO_VISITED_STYLE,
+        TileKind.RISK: RETRO_RISK_STYLE,
+        TileKind.WUMPUS: RETRO_WUMPUS_STYLE,
+        TileKind.DEAD_WUMPUS: RETRO_DEAD_WUMPUS_STYLE,
+        TileKind.PIT: RETRO_PIT_STYLE,
+        TileKind.BAT: RETRO_BAT_STYLE,
+        TileKind.GOLD: RETRO_GOLD_STYLE,
+        TileKind.EMPTY: RETRO_EMPTY_STYLE,
+        TileKind.AGENT: RETRO_AGENT_STYLE,
+    }
+)
+
+
+def tile_lines(
+    kind: TileKind, direction: Direction | None = None
+) -> tuple[str, ...]:
+    """Return the `TILE_HEIGHT` sprite lines, each `TILE_WIDTH` columns wide."""
+
+    if kind is TileKind.AGENT:
+        if direction is None:
+            raise ValueError("The agent sprite requires a facing direction")
+        return _AGENT_SPRITES[direction]
+    return _SPRITES[kind]
+
+
+def tile_style(kind: TileKind) -> str:
+    """Return the Rich style that communicates this tile's meaning."""
+
+    return TILE_STYLES[kind]

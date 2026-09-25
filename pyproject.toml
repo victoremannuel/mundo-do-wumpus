@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "rich>=13.7,<15",
+    # Persistent terminal interface (UI-RETRO-TUI-001). Textual 8.x renders
+    # through Rich and requires rich>=14.2, which the range above allows.
+    "textual>=8.2,<9",
 ]
 
 [project.optional-dependencies]
