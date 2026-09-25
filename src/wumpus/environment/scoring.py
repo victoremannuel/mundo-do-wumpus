@@ -1,26 +1,10 @@
-"""Single source of truth for game scoring values."""
+"""Compatibility exports for the canonical game scoring rules."""
 
-from types import MappingProxyType
-
-from wumpus.domain import Action
-
-
-ACTION_COSTS = MappingProxyType(
-    {
-        Action.MOVE_FORWARD: -1,
-        Action.TURN_RIGHT: -1,
-        Action.TURN_LEFT: -1,
-        Action.GRAB: -1,
-        Action.SHOOT: -10,
-        Action.CLIMB: -1,
-    }
+from wumpus.game.scoring import (
+    ACTION_COSTS,
+    DEATH_PENALTY,
+    GOLD_REWARD,
+    action_cost,
 )
 
-GOLD_REWARD = 1000
-DEATH_PENALTY = -1000
-
-
-def action_cost(action: Action) -> int:
-    """Return the complete base cost for one action."""
-
-    return ACTION_COSTS[action]
+__all__ = ("ACTION_COSTS", "DEATH_PENALTY", "GOLD_REWARD", "action_cost")

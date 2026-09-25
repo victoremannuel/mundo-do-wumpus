@@ -206,6 +206,48 @@ review: `PARTIALLY_COMPLIANT`, missing this record and flagging the gold
 fallthrough gap; logic review: one CONFIRMED HIGH-severity control-flow bug
 with a deterministic repro, fixed by the same change).
 
+## DEC-006 — Exit utility uses score-derived costs and gold-conditioned tolerance
+
+Date: 2026-09-25
+Status: ACCEPTED
+Affected phase(s): FASE 15 — Política de saída
+
+Context:
+Sections 45-48 require rational abandonment, permit a simple utility
+heuristic, and require more risk tolerance before collecting gold than after,
+but do not prescribe numeric thresholds or a probability model.
+
+Decision:
+Evaluate only the least-risk reachable candidate from FASE 14. Its incremental
+utility is the canonical gold reward multiplied by the configured fraction of
+gold still uncollected, minus the exact planned-action cost, an estimated
+hazard cost obtained by scaling the canonical death penalty by
+`candidate_risk / NO_GOLD_RISK_THRESHOLD`, and the canonical arrow cost when a
+shot is required. Before gold, accept at most the existing single-Wumpus risk
+threshold; after any gold, accept at most the bat-only weight. Once all
+configured gold is collected, return immediately regardless of safe frontier.
+If exploration is rejected, return to `[1,1]` and climb there, even with zero
+gold; if no safe return route is known, rotate deterministically in place.
+
+Reason:
+The model is deterministic, auditable, uses only agent-owned knowledge, and
+maps every term in section 46 to an existing centralized game value. The two
+thresholds make sections 47-48 operational without claiming unsupported
+probabilities, while climbing with zero gold is permitted by section 26 and
+satisfies section 45's unconditional case where no acceptable cell remains.
+
+Consequences:
+When the already-prioritized safe return route is disconnected, one collected
+gold still permits a positive-utility bat-only bridge, while two collected
+gold make the same risk unattractive; a pit-only or Wumpus-only candidate is
+always rejected after gold. Without gold, the agent remains willing to take a
+pit-only hypothesis when utility is positive. The policy does not inspect the
+real map or predict actual undiscovered gold locations.
+
+Evidence:
+Sections 26 and 45-48; `src/wumpus/agent/exit_policy.py`;
+`tests/unit/test_exit_policy.py`; `tests/unit/test_strategy.py`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

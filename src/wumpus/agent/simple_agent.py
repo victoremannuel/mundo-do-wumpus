@@ -1,4 +1,4 @@
-"""Logical agent combining memory, inference, and the FASE 12 strategy."""
+"""Logical agent combining memory, inference, strategy, and exit policy."""
 
 from __future__ import annotations
 
@@ -12,20 +12,14 @@ from wumpus.domain import Action, ActionResult, AgentObservation
 from wumpus.game.config import GameConfig, START_DIRECTION, START_POSITION
 
 
-_MOVEMENT_ACTIONS = (Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT)
-_MOVEMENT_WEIGHTS = (3, 1, 1)
-_TURN_ACTIONS = (Action.TURN_LEFT, Action.TURN_RIGHT)
-
-
 class SimpleAgent:
     """Update agent-owned knowledge, then apply the decision hierarchy.
 
-    Inference, planning, hunting, and least-risk fallback (priorities 1-7)
-    use reduced observations only. A bounded random fallback only remains
-    for the residual gap `Strategy.decide` leaves on purpose: full
-    exit-policy reasoning (section 45-46) is FASE 15's scope, so at the
-    start cell with nothing left to explore or risk, the agent still has no
-    directed action to take.
+    Inference, planning, hunting, least-risk exploration, and rational exit
+    decisions use reduced observations only. Strategy owns every outcome,
+    including a deterministic in-place turn when no safe return path or
+    acceptable risk step is known, so no knowledge-blind movement fallback
+    can override rational abandonment.
     """
 
     def __init__(
@@ -34,15 +28,13 @@ class SimpleAgent:
         config: GameConfig | None = None,
     ) -> None:
         game_config = config if config is not None else GameConfig()
-        self._rng = rng
-        self._blocked = False
         self._memory = AgentMemory(
             START_POSITION,
             START_DIRECTION,
             KnowledgeBase(game_config.rows, game_config.cols),
         )
         self._inference = InferenceEngine(self._memory.knowledge)
-        self._strategy = Strategy()
+        self._strategy = Strategy(total_gold=game_config.gold_count)
 
     @property
     def memory(self) -> AgentMemory:
@@ -73,12 +65,7 @@ class SimpleAgent:
             collected_gold=observation.collected_gold,
             glitter=observation.perception.glitter,
         )
-        if action is not None:
-            return action
-
-        if self._blocked:
-            return self._rng.choice(_TURN_ACTIONS)
-        return self._rng.choices(_MOVEMENT_ACTIONS, weights=_MOVEMENT_WEIGHTS)[0]
+        return action
 
     def process_result(self, result: ActionResult) -> None:
         """Update the minimal internal state derived from the last result."""
@@ -91,4 +78,3 @@ class SimpleAgent:
             self._strategy.confirm_kill(self._memory.knowledge, result)
         if not result.died:
             self._inference.observe(result.position, result.perception)
-        self._blocked = result.perception.bump

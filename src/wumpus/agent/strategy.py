@@ -10,11 +10,11 @@ Implements plan section 44's priorities 1-7:
    only ever a confirmed Wumpus, never mere suspicion): align directly when
    already sharing a row or column with it (section 55), otherwise route to
    the nearest reachable safe cell that would share one.
-6. Once no safe exploration and no shootable confirmed Wumpus remain, step
-   into the reachable, not-yet-safe cell with the lowest `risk.cell_risk`
-   score, provided it stays within `risk.RISK_THRESHOLD` (sections 42-43).
-7. When even the least-risk reachable cell exceeds that threshold (or none
-   exists), route back toward the start cell instead of taking the risk.
+6. Once no safe exploration and no shootable confirmed Wumpus remain, pass
+   the lowest-risk reachable cell through the exit policy's utility and
+   gold-conditioned tolerance checks (sections 42-48).
+7. When exploration is no longer rational, route back toward the start cell
+   or climb immediately when already there.
 
 Priorities 2-4 only *return* early when they actually produce an action;
 when routing toward an unexplored cell or back to the start cell finds no
@@ -22,32 +22,35 @@ safe path (e.g. an unclassified gap separates a disconnected safe region),
 `decide` falls through to priorities 5-7 instead of giving up immediately --
 including while holding gold, since section 45's "não existem novas células
 alcançáveis com risco aceitável" exit condition and section 48 both
-contemplate exactly that risk/reward tradeoff. `risk.RISK_THRESHOLD` itself
-stays a single, non-gold-conditioned constant: sections 47-48's differing
-risk tolerance before/after gold is FASE 15's "política de saída" scope (see
-`DEC-005`), not this priority's own threshold.
+contemplate exactly that risk/reward tradeoff. FASE 15's exit policy applies
+the stricter post-gold tolerance deferred by `DEC-005`.
 
-`decide` returns ``None`` only when no priority here applies at all -- e.g.
-already at the start cell with nothing left to explore or risk -- and the
-caller supplies its own fallback for that residual gap (full exit-policy
-reasoning, section 45-46, remains FASE 15's scope).
+When the agent is away from the exit and its safe knowledge contains neither
+an acceptable exploration step nor a route home, `decide` rotates in place
+instead of allowing a knowledge-blind fallback to enter rejected or confirmed
+danger. The global turn limit bounds that defensive wait.
 """
 
 from __future__ import annotations
 
 from collections import deque
 
+from wumpus.agent.exit_policy import should_explore
 from wumpus.agent.knowledge import KnowledgeBase
 from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
-from wumpus.agent.risk import RISK_THRESHOLD, least_risk_candidate
+from wumpus.agent.risk import least_risk_candidate
 from wumpus.domain import Action, ActionResult, Direction, Position
-from wumpus.game.config import START_POSITION
+from wumpus.game.config import START_POSITION, GameConfig
 
 
 class Strategy:
     """Choose one action per cycle, planning routes only through safe cells."""
 
-    def __init__(self) -> None:
+    def __init__(self, total_gold: int | None = None) -> None:
+        configured_gold = GameConfig().gold_count if total_gold is None else total_gold
+        if configured_gold < 0:
+            raise ValueError("total_gold cannot be negative")
+        self._total_gold = configured_gold
         self._target: Position | None = None
         self._path: list[Position] = []
         self._actions: deque[Action] = deque()
@@ -60,12 +63,15 @@ class Strategy:
         direction: Direction,
         collected_gold: int,
         glitter: bool,
-    ) -> Action | None:
-        """Return the next action, or ``None`` when no priority here applies."""
+    ) -> Action:
+        """Return the next action from the complete decision hierarchy."""
 
         if glitter:
             self._clear()
             return Action.GRAB
+
+        if collected_gold >= self._total_gold:
+            return self._return_or_wait(knowledge, position, direction)
 
         unexplored = knowledge.safe - knowledge.visited
 
@@ -86,11 +92,21 @@ class Strategy:
             if action is not None:
                 return action
 
-        action = self._hunt(knowledge, position, direction)
+        action = self._hunt(
+            knowledge,
+            position,
+            direction,
+            collected_gold,
+        )
         if action is not None:
             return action
 
-        action = self._explore_at_risk(knowledge, position, direction)
+        action = self._explore_at_risk(
+            knowledge,
+            position,
+            direction,
+            collected_gold,
+        )
         if action is not None:
             return action
 
@@ -130,6 +146,7 @@ class Strategy:
         knowledge: KnowledgeBase,
         position: Position,
         direction: Direction,
+        collected_gold: int,
     ) -> Action | None:
         """Priority 5: shoot a confirmed Wumpus once no safer option remains."""
 
@@ -139,6 +156,15 @@ class Strategy:
         )
         for wumpus in live_wumpus:
             if position.row == wumpus.row or position.col == wumpus.col:
+                required = self._direction_towards(position, wumpus)
+                if not should_explore(
+                    candidate_risk=0.0,
+                    movement_actions=len(turns_to_face(direction, required)),
+                    collected_gold=collected_gold,
+                    total_gold=self._total_gold,
+                    requires_arrow=True,
+                ):
+                    return None
                 return self._fire_at(position, direction, wumpus)
 
             alignment_cells = sorted(
@@ -150,6 +176,21 @@ class Strategy:
                 key=lambda cell: (position.manhattan_distance(cell), cell),
             )
             if not alignment_cells:
+                continue
+            alignment_cost = self._alignment_action_count(
+                knowledge,
+                position,
+                direction,
+                alignment_cells,
+                wumpus,
+            )
+            if alignment_cost is None or not should_explore(
+                candidate_risk=0.0,
+                movement_actions=alignment_cost,
+                collected_gold=collected_gold,
+                total_gold=self._total_gold,
+                requires_arrow=True,
+            ):
                 continue
             action = self._pursue(knowledge, position, direction, alignment_cells)
             if action is not None:
@@ -196,25 +237,99 @@ class Strategy:
         knowledge: KnowledgeBase,
         position: Position,
         direction: Direction,
+        collected_gold: int,
     ) -> Action | None:
-        """Priorities 6-7: least-risk step, or forced return when too risky.
-
-        Ordinarily reached with `collected_gold == 0`, since priority 2
-        already routes back to the start cell and climbs as soon as the
-        agent holds gold with no safe frontier left. It can still be reached
-        while holding gold if that return route itself has no safe path
-        (`decide` falls through rather than giving up) -- `RISK_THRESHOLD`
-        deliberately does not loosen or tighten for that case; see
-        `DEC-005`.
-        """
+        """Take an acceptable least-risk step or deliberately abandon."""
 
         candidate = least_risk_candidate(knowledge, position)
-        if candidate is not None and candidate.score <= RISK_THRESHOLD:
-            return self._approach(knowledge, position, direction, candidate.position)
+        if candidate is not None:
+            action_count = self._approach_action_count(
+                knowledge,
+                position,
+                direction,
+                candidate.position,
+            )
+            if action_count is not None and should_explore(
+                candidate_risk=candidate.score,
+                movement_actions=action_count,
+                collected_gold=collected_gold,
+                total_gold=self._total_gold,
+            ):
+                return self._approach(
+                    knowledge,
+                    position,
+                    direction,
+                    candidate.position,
+                )
+
+        return self._return_or_wait(knowledge, position, direction)
+
+    def _return_or_wait(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+    ) -> Action:
+        """Return safely, climb, or rotate in place when safe return is unknown."""
 
         if position == START_POSITION:
-            return None
-        return self._pursue(knowledge, position, direction, (START_POSITION,))
+            self._clear()
+            return Action.CLIMB
+        action = self._pursue(knowledge, position, direction, (START_POSITION,))
+        if action is not None:
+            return action
+        self._clear()
+        return Action.TURN_RIGHT
+
+    def _approach_action_count(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+        target: Position,
+    ) -> int | None:
+        """Return the exact action count for the best safe approach plan."""
+
+        staging_cells = sorted(
+            (cell for cell in knowledge.safe if target in cell.neighbors()),
+            key=lambda cell: (position.manhattan_distance(cell), cell),
+        )
+        for staging in staging_cells:
+            path = find_path(knowledge, position, staging)
+            if path is None:
+                continue
+            actions = plan_actions(path, direction)
+            final_direction = (
+                self._direction_towards(path[-2], path[-1])
+                if len(path) > 1
+                else direction
+            )
+            required = self._direction_towards(staging, target)
+            return len(actions) + len(turns_to_face(final_direction, required)) + 1
+        return None
+
+    def _alignment_action_count(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+        candidates: tuple[Position, ...] | list[Position],
+        wumpus: Position,
+    ) -> int | None:
+        """Count route and final facing actions for a firing position."""
+
+        for target in candidates:
+            path = find_path(knowledge, position, target)
+            if path is not None:
+                actions = plan_actions(path, direction)
+                final_direction = (
+                    self._direction_towards(path[-2], path[-1])
+                    if len(path) > 1
+                    else direction
+                )
+                required = self._direction_towards(target, wumpus)
+                return len(actions) + len(turns_to_face(final_direction, required))
+        return None
 
     def _approach(
         self,

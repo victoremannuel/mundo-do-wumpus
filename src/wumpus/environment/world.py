@@ -19,9 +19,9 @@ from wumpus.environment.bats import (
     choose_teleport_destination,
 )
 from wumpus.environment.generator import GeneratedMap
-from wumpus.environment.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 from wumpus.environment.sensors import sense
 from wumpus.game.config import START_DIRECTION, START_POSITION
+from wumpus.game.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 
 
 INVALID_CLIMB_EVENT = "Tentativa inválida de saída."

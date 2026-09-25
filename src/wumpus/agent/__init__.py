@@ -7,6 +7,14 @@ from wumpus.agent.inference import (
     InferenceEvent,
     InferenceLimitError,
 )
+from wumpus.agent.exit_policy import (
+    GOLD_RISK_THRESHOLD,
+    NO_GOLD_RISK_THRESHOLD,
+    UtilityEstimate,
+    estimate_exploration_utility,
+    risk_threshold,
+    should_explore,
+)
 from wumpus.agent.knowledge import (
     KnownCell,
     KnowledgeBase,
@@ -28,6 +36,8 @@ from wumpus.agent.strategy import Strategy
 __all__ = (
     "AgentMemory",
     "CONFIRMED_DANGER",
+    "FORWARD_DELTA",
+    "GOLD_RISK_THRESHOLD",
     "HAZARD_RISK_WEIGHTS",
     "InferenceEngine",
     "InferenceConflictError",
@@ -37,15 +47,19 @@ __all__ = (
     "KnowledgeBase",
     "KnowledgeConflictError",
     "MAX_INFERENCE_CYCLES",
+    "NO_GOLD_RISK_THRESHOLD",
     "PerceptionRecord",
     "RISK_THRESHOLD",
     "RiskCandidate",
     "SimpleAgent",
     "Strategy",
-    "FORWARD_DELTA",
+    "UtilityEstimate",
     "cell_risk",
+    "estimate_exploration_utility",
     "find_path",
     "least_risk_candidate",
     "plan_actions",
+    "risk_threshold",
+    "should_explore",
     "turns_to_face",
 )

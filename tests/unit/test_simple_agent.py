@@ -8,6 +8,7 @@ from wumpus.domain import (
     ActionResult,
     AgentObservation,
     Direction,
+    EntityType,
     Perception,
     Position,
 )
@@ -78,6 +79,36 @@ def test_agent_does_not_climb_carrying_gold_away_from_the_exit() -> None:
     decision = agent.decide(observation(position=Position(3, 2), collected_gold=1))
 
     assert decision is not Action.CLIMB
+
+
+def test_agent_deliberately_climbs_without_gold_when_risk_is_excessive() -> None:
+    agent = SimpleAgent(random.Random(1))
+
+    decision = agent.decide(observation(breeze=True, stench=True, bat_noise=True))
+
+    assert decision is Action.CLIMB
+
+
+def test_agent_never_randomly_moves_into_confirmed_danger_when_return_is_disconnected() -> None:
+    decisions = set()
+    for seed in range(20):
+        agent = SimpleAgent(random.Random(seed))
+        knowledge = agent.memory.knowledge
+        knowledge.mark_safe(Position(3, 1))
+        knowledge.mark_confirmed(Position(2, 1), EntityType.PIT)
+        knowledge.mark_confirmed(Position(4, 1), EntityType.PIT)
+
+        decisions.add(
+            agent.decide(
+                observation(
+                    position=Position(3, 1),
+                    collected_gold=1,
+                    breeze=True,
+                )
+            )
+        )
+
+    assert decisions == {Action.TURN_RIGHT}
 
 
 def test_agent_turns_after_a_bump() -> None:

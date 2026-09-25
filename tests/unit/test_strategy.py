@@ -1,5 +1,6 @@
 from collections import deque
 
+import wumpus.agent.strategy as strategy_module
 from wumpus.agent import KnowledgeBase, Strategy
 from wumpus.domain import Action, ActionResult, Direction, EntityType, Perception, Position
 from wumpus.game.config import START_POSITION
@@ -103,7 +104,7 @@ def test_strategy_explores_the_nearest_unvisited_safe_cell() -> None:
     assert action == Action.TURN_RIGHT
 
 
-def test_strategy_returns_none_when_no_priority_here_applies() -> None:
+def test_strategy_abandons_at_the_exit_when_no_exploration_remains() -> None:
     knowledge = safe_knowledge(3, 3, [Position(1, 1)])
     strategy = Strategy()
 
@@ -115,7 +116,7 @@ def test_strategy_returns_none_when_no_priority_here_applies() -> None:
         glitter=False,
     )
 
-    assert action is None
+    assert action is Action.CLIMB
 
 
 def test_strategy_reuses_the_queued_plan_across_calls() -> None:
@@ -306,11 +307,95 @@ def test_strategy_falls_through_to_risk_when_the_way_home_is_blocked_with_gold()
     assert strategy._target == Position(6, 1)
 
 
+def test_strategy_accepts_less_risk_after_collecting_gold() -> None:
+    without_gold = safe_knowledge(10, 1, [Position(5, 1)])
+    without_gold.mark_possible(Position(6, 1), EntityType.PIT)
+    exploratory = Strategy()
+
+    exploratory_action = exploratory.decide(
+        knowledge=without_gold,
+        position=Position(5, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    with_gold = safe_knowledge(10, 1, [START_POSITION, Position(5, 1)])
+    with_gold.mark_possible(Position(6, 1), EntityType.PIT)
+    preserving = Strategy()
+    preserving_action = preserving.decide(
+        knowledge=with_gold,
+        position=Position(5, 1),
+        direction=Direction.NORTH,
+        collected_gold=1,
+        glitter=False,
+    )
+
+    assert exploratory_action is not None
+    assert exploratory._target == Position(6, 1)
+    assert preserving_action is Action.TURN_RIGHT
+    assert preserving._target is None
+
+
+def test_strategy_utility_rejects_bat_risk_after_two_gold() -> None:
+    knowledge = safe_knowledge(10, 1, [START_POSITION, Position(5, 1)])
+    knowledge.mark_possible(Position(6, 1), EntityType.BAT)
+    strategy = Strategy(total_gold=3)
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(5, 1),
+        direction=Direction.NORTH,
+        collected_gold=2,
+        glitter=False,
+    )
+
+    assert action is Action.TURN_RIGHT
+    assert strategy._target is None
+
+
+def test_strategy_climbs_with_all_configured_gold_despite_safe_frontier() -> None:
+    knowledge = safe_knowledge(3, 3, [START_POSITION])
+    knowledge.mark_safe(Position(2, 1))
+    strategy = Strategy(total_gold=3)
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=START_POSITION,
+        direction=Direction.NORTH,
+        collected_gold=3,
+        glitter=False,
+    )
+
+    assert action is Action.CLIMB
+
+
+def test_strategy_returns_home_with_all_configured_gold_despite_safe_frontier() -> None:
+    knowledge = safe_knowledge(
+        3,
+        3,
+        [START_POSITION, Position(2, 1), Position(3, 1)],
+    )
+    knowledge.mark_safe(Position(3, 2))
+    strategy = Strategy(total_gold=3)
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(3, 1),
+        direction=Direction.NORTH,
+        collected_gold=3,
+        glitter=False,
+    )
+
+    assert action is Action.TURN_RIGHT
+    assert strategy._target == START_POSITION
+
+
 def test_strategy_ignores_an_unsafe_cell_that_is_not_reachable() -> None:
     # (5, 5) is a possible-pit candidate, but it is not adjacent to any cell
     # reachable from (1, 1) through proven-safe cells, so it is never a
-    # valid priority-6 target; with nothing else to do, priority 7 tries to
-    # return to the start cell, which is a no-op since it is already there.
+    # valid priority-6 target; with nothing else to do, the exit policy
+    # deliberately abandons exploration from the start cell.
     knowledge = safe_knowledge(5, 5, [Position(1, 1)])
     knowledge.mark_possible(Position(5, 5), EntityType.PIT)
     strategy = Strategy()
@@ -323,7 +408,7 @@ def test_strategy_ignores_an_unsafe_cell_that_is_not_reachable() -> None:
         glitter=False,
     )
 
-    assert action is None
+    assert action is Action.CLIMB
 
 
 def test_strategy_shoots_a_confirmed_wumpus_once_already_aligned() -> None:
@@ -364,7 +449,8 @@ def test_strategy_does_not_shoot_a_merely_possible_wumpus() -> None:
         glitter=False,
     )
 
-    assert action is None
+    assert action is Action.CLIMB
+    assert action is not Action.SHOOT
 
 
 def test_strategy_routes_to_an_alignment_cell_before_shooting() -> None:
@@ -537,6 +623,60 @@ def test_strategy_steps_into_the_chosen_risk_candidate_after_turning() -> None:
     assert second is Action.MOVE_FORWARD
 
 
+def test_strategy_prices_a_risk_approach_route_that_contains_a_turn() -> None:
+    knowledge = safe_knowledge(
+        3,
+        3,
+        [Position(1, 1), Position(2, 1), Position(2, 2)],
+    )
+    knowledge.mark_possible(Position(2, 3), EntityType.BAT)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert action is Action.MOVE_FORWARD
+    assert strategy._target == Position(2, 3)
+    assert strategy._approach_action_count(
+        knowledge,
+        Position(1, 1),
+        Direction.NORTH,
+        Position(2, 3),
+    ) == 4
+    assert Position(1, 1).manhattan_distance(Position(2, 3)) == 3
+
+
+def test_strategy_hunting_passes_the_canonical_arrow_cost_to_utility(
+    monkeypatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    real_should_explore = strategy_module.should_explore
+
+    def recording_policy(**kwargs):
+        calls.append(kwargs)
+        return real_should_explore(**kwargs)
+
+    monkeypatch.setattr(strategy_module, "should_explore", recording_policy)
+    knowledge = safe_knowledge(3, 3, [Position(1, 1)])
+    knowledge.mark_confirmed(Position(1, 3), EntityType.WUMPUS)
+
+    Strategy().decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.EAST,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert calls
+    assert calls[0]["requires_arrow"] is True
+
+
 def test_strategy_declines_a_risk_above_the_threshold_and_returns_to_start() -> None:
     # (3, 1) is a candidate for both a pit and a Wumpus (score 3 + 4 = 7),
     # above `risk.RISK_THRESHOLD` (4): priority 6 must not take that risk,
@@ -571,4 +711,4 @@ def test_strategy_never_treats_a_confirmed_danger_cell_as_a_risk_candidate() -> 
         glitter=False,
     )
 
-    assert action is None
+    assert action is Action.CLIMB
