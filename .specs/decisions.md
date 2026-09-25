@@ -248,6 +248,48 @@ Evidence:
 Sections 26 and 45-48; `src/wumpus/agent/exit_policy.py`;
 `tests/unit/test_exit_policy.py`; `tests/unit/test_strategy.py`.
 
+## DEC-007 — The reasoning panel shows the previous turn's decision, not a live preview
+
+Date: 2026-09-25
+Status: ACCEPTED
+Affected phase(s): FASE 16 — UI
+
+Context:
+Section 60's engine loop order is `observe -> render -> decide -> execute`,
+already implemented and `VERIFIED` by the unchanged FASE 7 `GameEngine.step`
+(`src/wumpus/game/engine.py`) and pinned by its own
+`tests/unit/test_engine.py` event-order test. Section 67's example panel
+("Próxima ação: MOVER PARA FRENTE") could be read as previewing the action
+about to be taken for the state currently on screen.
+
+Decision:
+`Strategy.decide` records a `DecisionReason` (section 68) at the moment it
+chooses an action, and `ConsoleRenderer.render` displays whatever
+`DecisionReason` is available when called. Given the fixed engine order, that
+value is always the *previous* turn's decision alongside the *new* observation
+it produced -- never a same-turn preview. This is not changed by choosing a
+different render call site.
+
+Reason:
+Reordering the loop to render after `decide()` would require modifying the
+already-`VERIFIED` FASE 7 `GameEngine`/`TurnRenderer` contract for a UI-only
+concern, which `AGENTS.md`'s scope-control rules discourage without a strict
+dependency. The one-turn lag is an inherent consequence of the plan's own
+documented loop order, not a shortcut invented in this phase, and the panel
+remains informative (it explains why the agent is now where it is).
+
+Consequences:
+The reasoning panel is empty on turn one (`Strategy.last_reason is None`
+before any `decide` call) and always describes the action that produced the
+currently rendered observation, not the one about to be taken. FASE 18's CLI
+wiring must not present the panel as a live preview of the next action.
+
+Evidence:
+Section 60 pseudocode; section 67-68; `src/wumpus/game/engine.py::GameEngine.step`;
+`src/wumpus/agent/strategy.py::Strategy.decide`;
+`src/wumpus/ui/console.py::render_reasoning`; independent specification
+review on 2026-09-25.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

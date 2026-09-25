@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 15 — Política de saída (`VERIFIED`)
+FASE 16 — UI (`VERIFIED`)
 
 ## Phase ledger
 
@@ -36,7 +36,7 @@ rename, merge, or reorder phases.
 | FASE 13 — Wumpus hunting | `VERIFIED` | `18 passed` (`test_strategy.py`); `19 passed` (`test_inference.py`); `9 passed` (`test_memory.py`); `179 passed` full; `compileall` passed; 2000-seed real-map stress run with 0 crashes and 0 unsound kill attributions; independent specification and logic audits `COMPLIANT` after fixing two confirmed defects (an inference false-confirmation regression and an unsound kill-attribution gap). |
 | FASE 14 — Risk engine | `VERIFIED` | `13 passed` (`test_risk.py`); `24 passed` (`test_strategy.py`); `198 passed` full; `compileall` passed; 1000-seed real-map stress run with 0 crashes after the fallthrough fix (845 `ESCAPED`, 150 `DEAD`, 5 `TURN_LIMIT`); independent specification and logic audits `COMPLIANT` after fixing a confirmed HIGH-severity priority-cascade short-circuit and recording `DEC-005`. |
 | FASE 15 — Política de saída | `VERIFIED` | `49 passed` targeted; `215 passed` full; `compileall` passed; final 100-seed stress run with 0 crashes and 50 deterministic replays; independent specification and logic audits `COMPLIANT` after fixing exhausted-gold and disconnected-fallback defects. |
-| FASE 16 — UI | `NOT_STARTED` | — |
+| FASE 16 — UI | `VERIFIED` | `61 passed` targeted (`test_reasoning.py`, `test_console.py`, `test_strategy.py`, `test_simple_agent.py`); `228 passed` full; `compileall` passed; independent specification review `COMPLIANT` after addressing a boundary-test gap, an additive-diff confirmation, a recorded decision, and two presentation cleanups. |
 | FASE 17 — Debug | `NOT_STARTED` | — |
 | FASE 18 — CLI | `NOT_STARTED` | — |
 | FASE 19 — Integration tests | `NOT_STARTED` | — |
@@ -49,35 +49,41 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 15 — Política de saída.
-- Completed acceptance criteria: Implemented sections 45-48 in
-  `src/wumpus/agent/exit_policy.py` and integrated them into `Strategy`.
-  The agent abandons exploration when the least-risk reachable alternative
-  exceeds its gold-conditioned tolerance or has non-positive utility, returns
-  safely to `[1,1]`, and deliberately executes `CLIMB` there even with no
-  gold. Utility uses the configured fraction of gold remaining, the exact
-  BFS-derived action count including turns/final step, score-derived hazard
-  cost, and canonical arrow cost. Collecting the configured total gold
-  preempts further exploration and forces return. When no safe return or
-  acceptable risk step exists away from the exit, Strategy returns a
-  deterministic `TURN_RIGHT`, never a knowledge-blind forward fallback.
-  Scoring constants moved to `wumpus.game.scoring` so both environment and
-  agent policy share one source without breaching the anti-cheat boundary.
-- Remaining acceptance criteria: None for FASE 15.
+- Last completed phase: FASE 16 — UI.
+- Completed acceptance criteria: Implemented the Rich console presentation
+  required by sections 62-68. `src/wumpus/ui/console.py::ConsoleRenderer`
+  renders a known-map panel (section 62) built exclusively from
+  `KnowledgeBase` classifications and the agent's own position/direction,
+  a perceptions panel (section 65), an agent status panel (section 66), and
+  a reasoning panel (sections 67-68). Colors and symbols (sections 63-64)
+  are centralized in `src/wumpus/ui/symbols.py`. `Strategy` gained a new
+  `DecisionReason` (`src/wumpus/agent/reasoning.py`) recorded at every
+  existing decision return point as a purely additive change (confirmed via
+  `git diff HEAD -- src/wumpus/agent/strategy.py`: only new lines plus two
+  `return X` -> `action = X; return action` restructurings, no condition or
+  branch order changed) -- so the agent produces structured "why" data and
+  the renderer translates it to text, never the reverse.
+- Remaining acceptance criteria: None for FASE 16. The renderer is not yet
+  wired into a runnable entry point; that wiring belongs to FASE 18 (CLI).
 - Last verified commands: `.venv/bin/python -m pytest
-  tests/unit/test_exit_policy.py tests/unit/test_strategy.py
-  tests/unit/test_simple_agent.py -q`; `.venv/bin/python -m pytest -q`;
-  `.venv/bin/python -m compileall -q src`; `git diff --check`; real-world
-  stress sweep for 100 seeds plus deterministic replay of the first 50.
-- Result: targeted `49 passed`; full suite `215 passed`; compilation and
-  diff checks exited 0. Final stress: 84 `ESCAPED`, 12 `DEAD`, 4
-  `TURN_LIMIT`, 0 crashes; all 50 replayed outcomes were identical. Earlier
-  300-seed validation of the corrected exit semantics also completed with
-  255 `ESCAPED`, 28 `DEAD`, 17 `TURN_LIMIT`, 0 crashes. Independent logic
-  and specification reviews both classified the final semantics
-  `COMPLIANT`; their initial reviews found and the phase fixed two HIGH
-  defects (continued search after all configured gold and random movement
-  into rejected/confirmed danger) plus exact-route/arrow-cost evidence gaps.
+  tests/unit/test_reasoning.py tests/unit/test_console.py
+  tests/unit/test_strategy.py tests/unit/test_simple_agent.py -q`;
+  `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`;
+  `git diff --check`.
+- Result: targeted `61 passed`; full suite `228 passed` (up from 215);
+  compilation and diff checks exited 0. Independent specification review
+  found the implementation `PARTIALLY_COMPLIANT` on first pass (no anti-cheat
+  violation, but missing a boundary test for the new `wumpus.ui` package, an
+  unconfirmed additive-diff claim, an unrecorded render-timing design
+  decision, and two low-severity presentation gaps); all four were
+  addressed: added
+  `tests/unit/test_console.py::test_ui_package_never_imports_the_environment_or_hidden_map_types`
+  (which also caught and fixed a false-positive `Table.grid(...)` call,
+  replaced with `Table(box=None, show_header=False, ...)`), confirmed the
+  additive-only `strategy.py` diff, recorded `DEC-007`, and reconciled the
+  symbol set (removed the unused `GOLD_SYMBOL` since `KnowledgeBase` has no
+  per-cell gold classification; wired `GLITTER_COLOR` into the perceptions
+  panel; localized the direction label via a new `DIRECTION_LABELS` map).
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -85,34 +91,38 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `src/wumpus/agent/exit_policy.py` (new)
+- `src/wumpus/agent/reasoning.py` (new)
 - `src/wumpus/agent/strategy.py`
 - `src/wumpus/agent/simple_agent.py`
 - `src/wumpus/agent/__init__.py`
-- `src/wumpus/game/scoring.py` (new canonical scoring source)
-- `src/wumpus/environment/scoring.py` (compatibility re-export)
-- `src/wumpus/environment/world.py`
-- `tests/unit/test_exit_policy.py` (new)
+- `src/wumpus/ui/__init__.py` (new)
+- `src/wumpus/ui/symbols.py` (new)
+- `src/wumpus/ui/console.py` (new)
+- `tests/unit/test_reasoning.py` (new)
+- `tests/unit/test_console.py` (new)
 - `tests/unit/test_strategy.py`
-- `tests/unit/test_simple_agent.py`
 - `.specs/decisions.md`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 45: rational abandonment returns toward `[1,1]`, climbs there when
-  no acceptable exploration remains, and fails closed deterministically when
-  a disconnected safe route cannot yet be proven.
-- Section 46: `UtilityEstimate` exposes expected remaining-gold value,
-  exact planned-action cost, score-derived hazard cost, canonical arrow cost,
-  and their total; `Strategy` uses the model for risk and hunting decisions.
-- Sections 47-48: tolerance drops from the FASE 14 threshold before gold to
-  bat-only risk after gold; increasing collected gold also reduces expected
-  future value, and exhausting configured gold forces immediate return.
-- Sections 57-59: the new policy consumes only configuration, canonical game
-  scoring, `KnowledgeBase`, and observation-derived state. The existing AST
-  boundary test covers every agent module and passes.
+- Section 62: `render_known_map` renders every cell's classification
+  (confirmed hazard, possible hazard, visited, safe, unknown) using only
+  `KnowledgeBase`, plus the agent's own position/direction glyph.
+- Sections 63-64: `src/wumpus/ui/symbols.py` centralizes every color and
+  symbol as the single source of truth for the console layer.
+- Section 65: `render_perceptions` shows all six perceived signals with the
+  plan's SIM/NÃO convention.
+- Section 66: `render_agent_status` shows position, direction, gold, score,
+  and an optional step count.
+- Sections 67-68: `Strategy.last_reason` exposes a structured
+  `DecisionReason` per decision; `render_reasoning` translates it to text
+  without the agent composing display strings itself.
+- Sections 57-59: the UI package reads only `AgentObservation`, agent-owned
+  `KnowledgeBase`, `DecisionReason`, and `GameOutcome` -- never
+  `wumpus.environment` or hidden map/world state, now covered by a
+  dedicated AST boundary test mirroring the agent package's own.
 
 ## Current blockers
 
@@ -129,20 +139,25 @@ rename, merge, or reorder phases.
   (sound-but-incomplete), not a defect.
 - A safely disconnected agent with no acceptable risk step rotates in place
   until knowledge changes or `MAX_TURNS` ends the game. This is deterministic
-  and fail-closed for FASE 15; explicit cycle detection and loop recovery
+  and fail-closed since FASE 15; explicit cycle detection and loop recovery
   remain later plan work (sections 105-108).
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
   shooting count, exploration percentage, and seed are deferred to the later
-  statistics/UI/CLI work.
-- Console rendering, debug map, and the CLI remain unimplemented until FASE 16
-  to FASE 18; the engine exposes `on_render` and `on_render_final` hooks for them.
+  statistics/CLI work.
+- The reasoning panel always shows the *previous* turn's `DecisionReason`
+  alongside the newly rendered observation, never a same-turn preview of the
+  upcoming action -- an inherent consequence of the already-`VERIFIED` FASE 7
+  engine's `observe -> render -> decide` order, recorded as `DEC-007`.
+- `ConsoleRenderer` is not yet wired into a runnable entry point; the debug
+  dual-map mode and the CLI remain unimplemented until FASE 17 and FASE 18.
 
 ## Next action
 
-Begin FASE 16 — UI by implementing the Rich console presentation required by
-sections 62-68, without moving domain decisions into rendering code.
+Begin FASE 17 — Debug by adding the real-map debug view (section 69) through
+an explicit debug-only path that never lets production agent code touch the
+real map, per AGENTS.md's debug-rendering invariant.
 
 ## Checkpoint update contract
 
@@ -164,10 +179,12 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-25 — FASE 15 — Política de saída verified: deterministic rational
-abandonment, configured remaining-gold utility, exact route/action cost,
-canonical hazard/arrow costs, gold-conditioned risk tolerance, exhausted-gold
-return, and fail-closed disconnected handling added under `DEC-006`.
-Independent reviews initially found two HIGH semantic defects and later
-classified the corrected result `COMPLIANT`. Targeted/full tests, compilation,
-diff validation, and final deterministic real-map stress evidence passed.
+2026-09-25 — FASE 16 — UI verified: `rich`-based `ConsoleRenderer` for the
+known map, perceptions, agent status, and reasoning panels (sections 62-68),
+backed by a new `DecisionReason` the agent records additively at every
+existing decision point. Independent specification review found the first
+pass `PARTIALLY_COMPLIANT` (missing a `wumpus.ui` boundary test, an
+unconfirmed additive-diff claim, an unrecorded render-timing decision, two
+presentation gaps); all four addressed, including recording `DEC-007` for
+the reasoning panel's inherent one-turn lag under the unchanged FASE 7 engine
+order. Targeted/full tests, compilation, and diff validation passed.

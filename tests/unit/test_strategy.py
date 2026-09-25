@@ -1,7 +1,7 @@
 from collections import deque
 
 import wumpus.agent.strategy as strategy_module
-from wumpus.agent import KnowledgeBase, Strategy
+from wumpus.agent import DecisionReason, KnowledgeBase, Strategy
 from wumpus.domain import Action, ActionResult, Direction, EntityType, Perception, Position
 from wumpus.game.config import START_POSITION
 
@@ -52,6 +52,36 @@ def test_strategy_grabs_gold_regardless_of_the_safe_frontier() -> None:
     )
 
     assert action is Action.GRAB
+    assert strategy.last_reason == DecisionReason(
+        Action.GRAB, "Brilho percebido: coletando ouro", Position(1, 1)
+    )
+
+
+def test_strategy_records_no_reason_before_any_decision() -> None:
+    strategy = Strategy()
+
+    assert strategy.last_reason is None
+
+
+def test_strategy_reasoning_targets_the_pursued_unexplored_cell() -> None:
+    knowledge = KnowledgeBase(3, 3)
+    knowledge.mark_visited(Position(1, 1))
+    knowledge.mark_safe(Position(1, 1))
+    knowledge.mark_safe(Position(1, 2))
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    reason = strategy.last_reason
+    assert reason is not None
+    assert reason.action is action
+    assert reason.target == Position(1, 2)
 
 
 def test_strategy_climbs_at_the_start_with_gold_and_no_safe_frontier() -> None:

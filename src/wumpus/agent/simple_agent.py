@@ -7,6 +7,7 @@ import random
 from wumpus.agent.inference import InferenceEngine
 from wumpus.agent.knowledge import KnowledgeBase
 from wumpus.agent.memory import AgentMemory
+from wumpus.agent.reasoning import DecisionReason
 from wumpus.agent.strategy import Strategy
 from wumpus.domain import Action, ActionResult, AgentObservation
 from wumpus.game.config import GameConfig, START_DIRECTION, START_POSITION
@@ -51,6 +52,10 @@ class SimpleAgent:
     @property
     def actions_taken(self) -> int:
         return len(self._memory.actions)
+
+    @property
+    def last_reason(self) -> DecisionReason | None:
+        return self._strategy.last_reason
 
     def decide(self, observation: AgentObservation) -> Action:
         """Return the next action using only the received observation."""

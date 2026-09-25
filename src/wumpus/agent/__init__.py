@@ -22,6 +22,7 @@ from wumpus.agent.knowledge import (
 )
 from wumpus.agent.memory import AgentMemory, PerceptionRecord
 from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
+from wumpus.agent.reasoning import DecisionReason
 from wumpus.agent.risk import (
     CONFIRMED_DANGER,
     HAZARD_RISK_WEIGHTS,
@@ -36,6 +37,7 @@ from wumpus.agent.strategy import Strategy
 __all__ = (
     "AgentMemory",
     "CONFIRMED_DANGER",
+    "DecisionReason",
     "FORWARD_DELTA",
     "GOLD_RISK_THRESHOLD",
     "HAZARD_RISK_WEIGHTS",

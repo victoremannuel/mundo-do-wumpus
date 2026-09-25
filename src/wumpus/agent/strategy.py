@@ -38,6 +38,7 @@ from collections import deque
 from wumpus.agent.exit_policy import should_explore
 from wumpus.agent.knowledge import KnowledgeBase
 from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
+from wumpus.agent.reasoning import DecisionReason
 from wumpus.agent.risk import least_risk_candidate
 from wumpus.domain import Action, ActionResult, Direction, Position
 from wumpus.game.config import START_POSITION, GameConfig
@@ -54,6 +55,13 @@ class Strategy:
         self._target: Position | None = None
         self._path: list[Position] = []
         self._actions: deque[Action] = deque()
+        self._last_reason: DecisionReason | None = None
+
+    @property
+    def last_reason(self) -> DecisionReason | None:
+        """Return the structured explanation for the most recent `decide` call."""
+
+        return self._last_reason
 
     def decide(
         self,
@@ -68,6 +76,9 @@ class Strategy:
 
         if glitter:
             self._clear()
+            self._last_reason = DecisionReason(
+                Action.GRAB, "Brilho percebido: coletando ouro", position
+            )
             return Action.GRAB
 
         if collected_gold >= self._total_gold:
@@ -78,9 +89,19 @@ class Strategy:
         if collected_gold > 0 and not unexplored:
             if position == START_POSITION:
                 self._clear()
+                self._last_reason = DecisionReason(
+                    Action.CLIMB,
+                    "Ouro coletado e nenhuma fronteira segura restante",
+                    START_POSITION,
+                )
                 return Action.CLIMB
             action = self._pursue(knowledge, position, direction, (START_POSITION,))
             if action is not None:
+                self._last_reason = DecisionReason(
+                    action,
+                    "Retornando ao ponto de partida com ouro coletado",
+                    START_POSITION,
+                )
                 return action
 
         elif unexplored:
@@ -90,6 +111,9 @@ class Strategy:
             )
             action = self._pursue(knowledge, position, direction, candidates)
             if action is not None:
+                self._last_reason = DecisionReason(
+                    action, "Explorando a célula segura mais próxima", self._target
+                )
                 return action
 
         action = self._hunt(
@@ -111,6 +135,9 @@ class Strategy:
             return action
 
         self._clear()
+        self._last_reason = DecisionReason(
+            None, "Nenhuma ação segura ou aceitável disponível", None
+        )
         return None
 
     def confirm_kill(self, knowledge: KnowledgeBase, result: ActionResult) -> None:
@@ -165,7 +192,11 @@ class Strategy:
                     requires_arrow=True,
                 ):
                     return None
-                return self._fire_at(position, direction, wumpus)
+                action = self._fire_at(position, direction, wumpus)
+                self._last_reason = DecisionReason(
+                    action, "Atirando no Wumpus confirmado alinhado", wumpus
+                )
+                return action
 
             alignment_cells = sorted(
                 (
@@ -194,6 +225,11 @@ class Strategy:
                 continue
             action = self._pursue(knowledge, position, direction, alignment_cells)
             if action is not None:
+                self._last_reason = DecisionReason(
+                    action,
+                    "Alinhando-se para atirar no Wumpus confirmado",
+                    wumpus,
+                )
                 return action
 
         return None
@@ -255,12 +291,19 @@ class Strategy:
                 collected_gold=collected_gold,
                 total_gold=self._total_gold,
             ):
-                return self._approach(
+                action = self._approach(
                     knowledge,
                     position,
                     direction,
                     candidate.position,
                 )
+                self._last_reason = DecisionReason(
+                    action,
+                    f"Aceitando risco calculado ({candidate.score:.2f}) "
+                    "dentro da tolerância",
+                    candidate.position,
+                )
+                return action
 
         return self._return_or_wait(knowledge, position, direction)
 
@@ -274,11 +317,26 @@ class Strategy:
 
         if position == START_POSITION:
             self._clear()
+            self._last_reason = DecisionReason(
+                Action.CLIMB,
+                "Retorno racional: ponto de partida alcançado",
+                START_POSITION,
+            )
             return Action.CLIMB
         action = self._pursue(knowledge, position, direction, (START_POSITION,))
         if action is not None:
+            self._last_reason = DecisionReason(
+                action,
+                "Retorno racional: navegando de volta ao ponto de partida",
+                START_POSITION,
+            )
             return action
         self._clear()
+        self._last_reason = DecisionReason(
+            Action.TURN_RIGHT,
+            "Nenhuma rota segura conhecida; aguardando em posição",
+            None,
+        )
         return Action.TURN_RIGHT
 
     def _approach_action_count(
