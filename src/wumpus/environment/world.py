@@ -1,6 +1,9 @@
 """Private real-world state and deterministic environment mechanics."""
 
 import random
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 
 from wumpus.domain import (
     Action,
@@ -25,6 +28,27 @@ from wumpus.game.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 
 
 INVALID_CLIMB_EVENT = "Tentativa inválida de saída."
+
+
+@dataclass(frozen=True)
+class DebugWorldSnapshot:
+    """Immutable hidden-state snapshot intended only for debug rendering."""
+
+    rows: int
+    cols: int
+    agent_position: Position
+    agent_direction: Direction
+    entities: Mapping[Position, EntityType]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "entities", MappingProxyType(dict(self.entities)))
+
+    def entity_at(self, position: Position) -> EntityType:
+        """Return the current real entity at an in-bounds position."""
+
+        if not position.is_inside(self.rows, self.cols):
+            raise ValueError(f"Position outside debug snapshot: {position}")
+        return self.entities.get(position, EntityType.EMPTY)
 
 
 class World:
@@ -101,6 +125,23 @@ class World:
     @property
     def last_event(self) -> str | None:
         return self._last_event
+
+    def debug_snapshot(self) -> DebugWorldSnapshot:
+        """Return hidden state for the explicit professor/debug path only."""
+
+        entities = {
+            **dict.fromkeys(self._alive_wumpus, EntityType.WUMPUS),
+            **dict.fromkeys(self._pits, EntityType.PIT),
+            **dict.fromkeys(self._gold, EntityType.GOLD),
+            **dict.fromkeys(self._bats, EntityType.BAT),
+        }
+        return DebugWorldSnapshot(
+            rows=self._rows,
+            cols=self._cols,
+            agent_position=self._agent_position,
+            agent_direction=self._agent_direction,
+            entities=entities,
+        )
 
     def observation(self) -> AgentObservation:
         """Return the only information surface exposed to the agent."""

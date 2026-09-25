@@ -14,6 +14,7 @@ GLITTER_COLOR = "bright_yellow"
 WUMPUS_COLOR = "magenta"
 PIT_COLOR = "red"
 BAT_COLOR = "blue"
+GOLD_COLOR = "bright_yellow"
 
 AGENT_SYMBOLS = MappingProxyType(
     {
@@ -39,3 +40,5 @@ RISK_SYMBOL = "!"
 WUMPUS_SYMBOL = "W"
 PIT_SYMBOL = "P"
 BAT_SYMBOL = "B"
+GOLD_SYMBOL = "G"
+EMPTY_SYMBOL = "."

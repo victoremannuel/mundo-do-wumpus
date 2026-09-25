@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 16 — UI (`VERIFIED`)
+FASE 17 — Debug (`VERIFIED`)
 
 ## Phase ledger
 
@@ -37,7 +37,7 @@ rename, merge, or reorder phases.
 | FASE 14 — Risk engine | `VERIFIED` | `13 passed` (`test_risk.py`); `24 passed` (`test_strategy.py`); `198 passed` full; `compileall` passed; 1000-seed real-map stress run with 0 crashes after the fallthrough fix (845 `ESCAPED`, 150 `DEAD`, 5 `TURN_LIMIT`); independent specification and logic audits `COMPLIANT` after fixing a confirmed HIGH-severity priority-cascade short-circuit and recording `DEC-005`. |
 | FASE 15 — Política de saída | `VERIFIED` | `49 passed` targeted; `215 passed` full; `compileall` passed; final 100-seed stress run with 0 crashes and 50 deterministic replays; independent specification and logic audits `COMPLIANT` after fixing exhausted-gold and disconnected-fallback defects. |
 | FASE 16 — UI | `VERIFIED` | `61 passed` targeted (`test_reasoning.py`, `test_console.py`, `test_strategy.py`, `test_simple_agent.py`); `228 passed` full; `compileall` passed; independent specification review `COMPLIANT` after addressing a boundary-test gap, an additive-diff confirmation, a recorded decision, and two presentation cleanups. |
-| FASE 17 — Debug | `NOT_STARTED` | — |
+| FASE 17 — Debug | `VERIFIED` | `5 passed` targeted; `48 passed` affected; `233 passed` full; `compileall`, deterministic snapshots, and anti-cheat checks passed; specification audit `COMPLIANT`. |
 | FASE 18 — CLI | `NOT_STARTED` | — |
 | FASE 19 — Integration tests | `NOT_STARTED` | — |
 | FASE 20 — E2E | `NOT_STARTED` | — |
@@ -49,41 +49,26 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 16 — UI.
-- Completed acceptance criteria: Implemented the Rich console presentation
-  required by sections 62-68. `src/wumpus/ui/console.py::ConsoleRenderer`
-  renders a known-map panel (section 62) built exclusively from
-  `KnowledgeBase` classifications and the agent's own position/direction,
-  a perceptions panel (section 65), an agent status panel (section 66), and
-  a reasoning panel (sections 67-68). Colors and symbols (sections 63-64)
-  are centralized in `src/wumpus/ui/symbols.py`. `Strategy` gained a new
-  `DecisionReason` (`src/wumpus/agent/reasoning.py`) recorded at every
-  existing decision return point as a purely additive change (confirmed via
-  `git diff HEAD -- src/wumpus/agent/strategy.py`: only new lines plus two
-  `return X` -> `action = X; return action` restructurings, no condition or
-  branch order changed) -- so the agent produces structured "why" data and
-  the renderer translates it to text, never the reverse.
-- Remaining acceptance criteria: None for FASE 16. The renderer is not yet
-  wired into a runnable entry point; that wiring belongs to FASE 18 (CLI).
+- Last completed phase: FASE 17 — Debug.
+- Completed acceptance criteria: Added an explicit professor/debug path for
+  sections 69-71. `World.debug_snapshot()` returns an immutable current-state
+  `DebugWorldSnapshot`; `wumpus.debug.DebugRenderer` is the only presentation
+  path that accepts `World`, renders both `MAPA CONHECIDO PELO AGENTE` and
+  `MAPA REAL`, and displays the current agent orientation plus live Wumpus,
+  pits, uncollected gold, bats, and empty cells. The normal UI, game engine,
+  and agent packages do not import the debug package or snapshot type.
+- Remaining acceptance criteria: None for FASE 17. CLI wiring for `--debug`
+  remains explicitly assigned to FASE 18 by the phase roadmap.
 - Last verified commands: `.venv/bin/python -m pytest
-  tests/unit/test_reasoning.py tests/unit/test_console.py
-  tests/unit/test_strategy.py tests/unit/test_simple_agent.py -q`;
+  tests/unit/test_debug_renderer.py -q`; `.venv/bin/python -m pytest
+  tests/unit/test_debug_renderer.py tests/unit/test_console.py
+  tests/unit/test_world.py tests/unit/test_simple_agent.py -q`;
   `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`;
-  `git diff --check`.
-- Result: targeted `61 passed`; full suite `228 passed` (up from 215);
-  compilation and diff checks exited 0. Independent specification review
-  found the implementation `PARTIALLY_COMPLIANT` on first pass (no anti-cheat
-  violation, but missing a boundary test for the new `wumpus.ui` package, an
-  unconfirmed additive-diff claim, an unrecorded render-timing design
-  decision, and two low-severity presentation gaps); all four were
-  addressed: added
-  `tests/unit/test_console.py::test_ui_package_never_imports_the_environment_or_hidden_map_types`
-  (which also caught and fixed a false-positive `Table.grid(...)` call,
-  replaced with `Table(box=None, show_header=False, ...)`), confirmed the
-  additive-only `strategy.py` diff, recorded `DEC-007`, and reconciled the
-  symbol set (removed the unused `GOLD_SYMBOL` since `KnowledgeBase` has no
-  per-cell gold classification; wired `GLITTER_COLOR` into the perceptions
-  panel; localized the direction label via a new `DIRECTION_LABELS` map).
+  100-seed deterministic debug-snapshot replay; `git diff --check`.
+- Result: targeted `5 passed`; affected `48 passed`; full suite `233 passed`
+  (up from 228); compilation, determinism, anti-cheat, and diff checks exited
+  0. Ruff was not installed/configured. Specification compliance review was
+  `COMPLIANT` with no open findings.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -91,38 +76,22 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `src/wumpus/agent/reasoning.py` (new)
-- `src/wumpus/agent/strategy.py`
-- `src/wumpus/agent/simple_agent.py`
-- `src/wumpus/agent/__init__.py`
-- `src/wumpus/ui/__init__.py` (new)
-- `src/wumpus/ui/symbols.py` (new)
-- `src/wumpus/ui/console.py` (new)
-- `tests/unit/test_reasoning.py` (new)
-- `tests/unit/test_console.py` (new)
-- `tests/unit/test_strategy.py`
-- `.specs/decisions.md`
+- `src/wumpus/environment/world.py`
+- `src/wumpus/debug/__init__.py` (new)
+- `src/wumpus/debug/renderer.py` (new)
+- `src/wumpus/ui/symbols.py`
+- `tests/unit/test_debug_renderer.py` (new)
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 62: `render_known_map` renders every cell's classification
-  (confirmed hazard, possible hazard, visited, safe, unknown) using only
-  `KnowledgeBase`, plus the agent's own position/direction glyph.
-- Sections 63-64: `src/wumpus/ui/symbols.py` centralizes every color and
-  symbol as the single source of truth for the console layer.
-- Section 65: `render_perceptions` shows all six perceived signals with the
-  plan's SIM/NÃO convention.
-- Section 66: `render_agent_status` shows position, direction, gold, score,
-  and an optional step count.
-- Sections 67-68: `Strategy.last_reason` exposes a structured
-  `DecisionReason` per decision; `render_reasoning` translates it to text
-  without the agent composing display strings itself.
-- Sections 57-59: the UI package reads only `AgentObservation`, agent-owned
-  `KnowledgeBase`, `DecisionReason`, and `GameOutcome` -- never
-  `wumpus.environment` or hidden map/world state, now covered by a
-  dedicated AST boundary test mirroring the agent package's own.
+- Sections 69 and 71: professor mode renders the known and real maps together;
+  the real map uses current environment state and the centralized `W`, `P`,
+  `G`, `B`, `.`, and oriented-agent symbols.
+- Section 70: hidden state flows only from `World` to `DebugRenderer` through
+  an immutable snapshot. Production agent, engine, and normal UI code neither
+  imports nor receives the debug snapshot or renderer.
 
 ## Current blockers
 
@@ -150,14 +119,14 @@ rename, merge, or reorder phases.
   alongside the newly rendered observation, never a same-turn preview of the
   upcoming action -- an inherent consequence of the already-`VERIFIED` FASE 7
   engine's `observe -> render -> decide` order, recorded as `DEC-007`.
-- `ConsoleRenderer` is not yet wired into a runnable entry point; the debug
-  dual-map mode and the CLI remain unimplemented until FASE 17 and FASE 18.
+- `ConsoleRenderer` and `DebugRenderer` are not yet wired into a runnable
+  entry point; all CLI flags, including `--debug`, belong to FASE 18.
 
 ## Next action
 
-Begin FASE 17 — Debug by adding the real-map debug view (section 69) through
-an explicit debug-only path that never lets production agent code touch the
-real map, per AGENTS.md's debug-rendering invariant.
+Begin FASE 18 — CLI by adding the plan-defined flags (`--seed`, `--debug`,
+`--step`, `--delay`, and `--no-delay`) and wiring the existing normal/debug
+renderers without changing the agent/environment boundary.
 
 ## Checkpoint update contract
 
@@ -179,12 +148,8 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-25 — FASE 16 — UI verified: `rich`-based `ConsoleRenderer` for the
-known map, perceptions, agent status, and reasoning panels (sections 62-68),
-backed by a new `DecisionReason` the agent records additively at every
-existing decision point. Independent specification review found the first
-pass `PARTIALLY_COMPLIANT` (missing a `wumpus.ui` boundary test, an
-unconfirmed additive-diff claim, an unrecorded render-timing decision, two
-presentation gaps); all four addressed, including recording `DEC-007` for
-the reasoning panel's inherent one-turn lag under the unchanged FASE 7 engine
-order. Targeted/full tests, compilation, and diff validation passed.
+2026-09-25 — FASE 17 — Debug verified: added an immutable current real-map
+snapshot and an explicit `DebugRenderer` that shows agent knowledge beside the
+real map while leaving the agent, engine, and normal UI isolated from hidden
+state. Targeted `5 passed`, affected `48 passed`, full `233 passed`, compilation
+and deterministic replay passed, and specification audit was `COMPLIANT`.
