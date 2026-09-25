@@ -13,6 +13,7 @@ from wumpus.agent.knowledge import (
     KnowledgeConflictError,
 )
 from wumpus.agent.memory import AgentMemory, PerceptionRecord
+from wumpus.agent.planner import find_path, plan_actions
 from wumpus.agent.simple_agent import SimpleAgent
 
 __all__ = (
@@ -27,4 +28,6 @@ __all__ = (
     "MAX_INFERENCE_CYCLES",
     "PerceptionRecord",
     "SimpleAgent",
+    "find_path",
+    "plan_actions",
 )

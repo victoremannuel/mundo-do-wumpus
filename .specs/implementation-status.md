@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 11 — Planner (`NOT_STARTED`)
+FASE 11 — Planner (`VERIFIED`)
 
 ## Phase ledger
 
@@ -31,7 +31,7 @@ rename, merge, or reorder phases.
 | FASE 8 — Memory | `VERIFIED` | `7 passed` targeted; `31 passed` affected; `116 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 9 — Knowledge Base | `VERIFIED` | `14 passed` targeted; `45 passed` affected; `130 passed` full; `compileall` passed; independent audit `COMPLIANT`. |
 | FASE 10 — Inference Engine | `VERIFIED` | `18 passed` targeted; `64 passed` affected; `149 passed` full; `compileall`, determinism, and anti-cheat checks passed; independent logic/specification audits `COMPLIANT`. |
-| FASE 11 — Planner | `NOT_STARTED` | — |
+| FASE 11 — Planner | `VERIFIED` | `10 passed` targeted; `18 passed` affected (`test_simple_agent.py`); `159 passed` full; `compileall` passed; specification and logic audits `COMPLIANT`. |
 | FASE 12 — Strategy | `NOT_STARTED` | — |
 | FASE 13 — Wumpus hunting | `NOT_STARTED` | — |
 | FASE 14 — Risk engine | `NOT_STARTED` | — |
@@ -49,25 +49,26 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 10 — Inference Engine.
-- Completed acceptance criteria: Implemented absence rules for all three hazard
-  signals, typed candidates for positive signals, singleton elimination,
-  derived safety, bounded fixed-point processing, idempotent functional events,
-  fail-closed inconsistent-evidence handling, and integration through reduced
-  observations only.
-- Remaining acceptance criteria: None for FASE 10. Planning and pathfinding
-  remain intentionally assigned to FASE 11.
+- Last completed phase: FASE 11 — Planner.
+- Completed acceptance criteria: Implemented isolated BFS restricted to
+  agent-owned `safe` knowledge, shortest-path reconstruction, the no-path
+  result for isolated goals, and route-to-action conversion (turns plus
+  `MOVE_FORWARD`) matching the plan's worked example, returned as a
+  `deque[Action]`.
+- Remaining acceptance criteria: None for FASE 11. Plan invalidation on new
+  critical information (section 52) and teleport-triggered replanning
+  (section 53) are integration behaviors intentionally deferred to the
+  engine/strategy wiring in later phases; FASE 11 exposes the planner as a
+  pure function only.
 - Last verified commands: `.venv/bin/python -m pytest
-  tests/unit/test_inference.py -q`; `.venv/bin/python -m pytest
-  tests/unit/test_inference.py tests/unit/test_knowledge.py
-  tests/unit/test_memory.py tests/unit/test_simple_agent.py
-  tests/unit/test_engine.py -q`;
+  tests/unit/test_planner.py -q`; `.venv/bin/python -m pytest
+  tests/unit/test_planner.py tests/unit/test_simple_agent.py -q`;
   `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `18 passed`; affected tests `64 passed`; full suite
-  `149 passed`; compilation exit 0; seeded determinism and anti-cheat tests
-  passed. Independent logic and specification reviews are `COMPLIANT` after
-  the authorized multiplicity-aware interpretation was implemented and
-  documented in `DEC-003`.
+- Result: Targeted tests `10 passed`; affected tests `18 passed`; full suite
+  `159 passed`; compilation exit 0. Independent logic review confirmed
+  shortest-path correctness, determinism, safe-cell boundary enforcement, and
+  turn-count logic with no bugs. Independent specification review confirmed
+  `COMPLIANT` after this checkpoint records the phase in the state files.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -75,30 +76,24 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
+- `src/wumpus/agent/planner.py`
 - `src/wumpus/agent/__init__.py`
-- `src/wumpus/agent/inference.py`
-- `src/wumpus/agent/simple_agent.py`
-- `tests/unit/test_inference.py`
-- `tests/unit/test_memory.py`
-- `.specs/decisions.md`
+- `tests/unit/test_planner.py`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Sections 34–36, 38–40, and 96–98: absence creates negative and safe
-  knowledge, presence creates typed candidates, and elimination confirms the
-  only unresolved candidate for pits, Wumpus, and bats.
-- Sections 7, 37, and 74 under accepted `DEC-003`: each positive observation
-  remains an independent existential constraint; singleton intersections do
-  not falsely confirm hazards when multiple hazards can satisfy the evidence.
-- Sections 127 and 130–131: inference repeats to a bounded fixed point, remains
-  idempotent, propagates cross-hazard elimination cascades, and records
-  functional events only for effective changes.
-- Sections 57–59 and 123–124: `SimpleAgent` feeds inference exclusively from
-  reduced `AgentObservation` and non-lethal `ActionResult` values.
-- Inconsistent positive evidence with no compatible candidate fails closed
-  rather than being silently accepted.
+- Section 49: BFS route planning restricted to cells classified `safe`,
+  avoiding hazards and unknown cells by construction.
+- Section 50: exact position/direction-to-action conversion reproducing the
+  plan's worked example (`TURN_RIGHT`, `MOVE_FORWARD`).
+- Section 51: the converted route is a `deque[Action]`.
+- Section 99: shortest path, hazard avoidance, unknown-cell avoidance, and
+  the no-path case for an isolated goal are each covered by a dedicated test.
+- Sections 57–59: `planner.py` imports only `wumpus.agent.knowledge` and
+  `wumpus.domain`; it never imports `wumpus.environment` or references
+  hidden map/World state, verified by the existing AST boundary test.
 
 ## Current blockers
 
@@ -107,8 +102,13 @@ rename, merge, or reorder phases.
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- `SimpleAgent` now has inference but remains intentionally without planning,
-  strategy, hunting, or risk evaluation from later phases.
+- `find_path`/`plan_actions` are pure functions not yet wired into
+  `SimpleAgent`; integration with strategy/decision-making is deferred to
+  FASE 12 — Strategy.
+- Plan invalidation on new critical information (section 52) and teleport
+  replanning (section 53) are not implemented; they belong to the engine/
+  strategy integration once the planner is wired into the agent's decision
+  loop.
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
@@ -122,9 +122,10 @@ rename, merge, or reorder phases.
 
 ## Next action
 
-Begin FASE 11 — Planner by implementing isolated BFS over agent-owned safe
-knowledge, including shortest-path, orientation/action conversion, unreachable
-goals, and the no-path case without consulting environment state.
+Begin FASE 12 — Strategy by implementing the decision hierarchy that consumes
+`KnowledgeBase`, `InferenceEngine`, and the FASE 11 planner to choose actions,
+wiring `find_path`/`plan_actions` into the agent's decision loop with plan
+invalidation on new critical information.
 
 ## Checkpoint update contract
 
@@ -146,6 +147,7 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 10 — Inference Engine verified after explicit acceptance of
-the multiplicity-aware `DEC-003`, focused/affected/full tests, compilation,
-determinism, anti-cheat validation, and independent critical reviews.
+2026-09-24 — FASE 11 — Planner verified: isolated BFS over agent-owned safe
+knowledge, route-to-action conversion, targeted/affected/full tests,
+compilation, and independent logic/specification reviews with no confirmed
+defects.
