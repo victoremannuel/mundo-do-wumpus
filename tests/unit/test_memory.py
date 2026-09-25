@@ -1,6 +1,6 @@
 import random
 
-from wumpus.agent import AgentMemory, SimpleAgent
+from wumpus.agent import AgentMemory, KnowledgeBase, SimpleAgent
 from wumpus.domain import (
     Action,
     ActionResult,
@@ -22,6 +22,14 @@ NO_PERCEPTION = Perception(
     bump=False,
     scream=False,
 )
+
+
+def new_memory() -> AgentMemory:
+    return AgentMemory(
+        Position(1, 1),
+        Direction.NORTH,
+        KnowledgeBase(rows=6, cols=6),
+    )
 
 
 def observation(
@@ -64,7 +72,7 @@ def action_result(
 
 
 def test_memory_starts_with_only_the_known_initial_state() -> None:
-    memory = AgentMemory(Position(1, 1), Direction.NORTH)
+    memory = new_memory()
 
     assert memory.position == Position(1, 1)
     assert memory.direction is Direction.NORTH
@@ -77,7 +85,7 @@ def test_memory_starts_with_only_the_known_initial_state() -> None:
 
 
 def test_memory_records_observations_without_inferring_hazards() -> None:
-    memory = AgentMemory(Position(1, 1), Direction.NORTH)
+    memory = new_memory()
     sensed = Perception(
         stench=True,
         breeze=True,
@@ -109,7 +117,7 @@ def test_memory_records_observations_without_inferring_hazards() -> None:
 
 
 def test_memory_records_executed_actions_results_and_travel_path() -> None:
-    memory = AgentMemory(Position(1, 1), Direction.NORTH)
+    memory = new_memory()
 
     memory.record_result(
         action_result(Action.MOVE_FORWARD, Position(2, 1), total_score=-1)
@@ -136,7 +144,7 @@ def test_memory_records_executed_actions_results_and_travel_path() -> None:
 
 
 def test_memory_preserves_repeated_perceptions_in_chronological_order() -> None:
-    memory = AgentMemory(Position(1, 1), Direction.NORTH)
+    memory = new_memory()
     breeze = Perception(**{**vars(NO_PERCEPTION), "breeze": True})
 
     memory.record_observation(observation(Position(1, 1), perception=breeze))
@@ -149,7 +157,7 @@ def test_memory_preserves_repeated_perceptions_in_chronological_order() -> None:
 
 
 def test_memory_preserves_transient_perceptions_from_action_results() -> None:
-    memory = AgentMemory(Position(1, 1), Direction.NORTH)
+    memory = new_memory()
     transient = Perception(
         stench=False,
         breeze=False,
@@ -176,7 +184,7 @@ def test_memory_preserves_transient_perceptions_from_action_results() -> None:
 
 
 def test_memory_updates_gold_count_immediately_after_a_successful_grab() -> None:
-    memory = AgentMemory(Position(1, 1), Direction.NORTH)
+    memory = new_memory()
 
     memory.record_result(
         action_result(

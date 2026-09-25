@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import random
 
+from wumpus.agent.knowledge import KnowledgeBase
 from wumpus.agent.memory import AgentMemory
 from wumpus.domain import Action, ActionResult, AgentObservation
-from wumpus.game.config import START_DIRECTION, START_POSITION
+from wumpus.game.config import GameConfig, START_DIRECTION, START_POSITION
 
 
 _MOVEMENT_ACTIONS = (Action.MOVE_FORWARD, Action.TURN_LEFT, Action.TURN_RIGHT)
@@ -21,10 +22,19 @@ class SimpleAgent:
     the real loop. Knowledge representation and reasoning begin in FASE 9.
     """
 
-    def __init__(self, rng: random.Random) -> None:
+    def __init__(
+        self,
+        rng: random.Random,
+        config: GameConfig | None = None,
+    ) -> None:
+        game_config = config if config is not None else GameConfig()
         self._rng = rng
         self._blocked = False
-        self._memory = AgentMemory(START_POSITION, START_DIRECTION)
+        self._memory = AgentMemory(
+            START_POSITION,
+            START_DIRECTION,
+            KnowledgeBase(game_config.rows, game_config.cols),
+        )
 
     @property
     def memory(self) -> AgentMemory:

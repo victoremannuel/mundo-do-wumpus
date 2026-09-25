@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from wumpus.agent.knowledge import KnowledgeBase
 from wumpus.domain import (
     Action,
     ActionResult,
@@ -32,10 +33,13 @@ class AgentMemory:
         self,
         initial_position: Position,
         initial_direction: Direction,
+        knowledge: KnowledgeBase,
     ) -> None:
+        knowledge.mark_visited(initial_position)
+        knowledge.mark_safe(initial_position)
         self._position = initial_position
         self._direction = initial_direction
-        self._visited: set[Position] = {initial_position}
+        self._knowledge = knowledge
         self._perception_history: list[PerceptionRecord] = []
         self._gold_seen: set[Position] = set()
         self._path: list[Position] = [initial_position]
@@ -53,7 +57,11 @@ class AgentMemory:
 
     @property
     def visited(self) -> frozenset[Position]:
-        return frozenset(self._visited)
+        return self._knowledge.visited
+
+    @property
+    def knowledge(self) -> KnowledgeBase:
+        return self._knowledge
 
     @property
     def perception_history(self) -> tuple[PerceptionRecord, ...]:
@@ -83,6 +91,8 @@ class AgentMemory:
         """Remember the current observable state before a decision."""
 
         self._remember_position(observation.position)
+        if observation.active:
+            self._knowledge.mark_safe(observation.position)
         self._direction = observation.direction
         self._score = observation.score
         self._collected_gold = observation.collected_gold
@@ -98,6 +108,8 @@ class AgentMemory:
 
         self._actions.append(result.action)
         self._remember_position(result.position)
+        if not result.died:
+            self._knowledge.mark_safe(result.position)
         self._direction = result.direction
         self._score = result.total_score
         if result.gold_collected:
@@ -112,7 +124,7 @@ class AgentMemory:
 
     def _remember_position(self, position: Position) -> None:
         self._position = position
-        self._visited.add(position)
+        self._knowledge.mark_visited(position)
         if position != self._path[-1]:
             self._path.append(position)
 

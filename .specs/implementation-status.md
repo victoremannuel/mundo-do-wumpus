@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 9 — Knowledge Base (`NOT_STARTED`)
+FASE 10 — Inference Engine (`NOT_STARTED`)
 
 ## Phase ledger
 
@@ -29,7 +29,7 @@ rename, merge, or reorder phases.
 | FASE 6 — Morcegos | `VERIFIED` | `42 passed` targeted; `85 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 7 — Engine | `VERIFIED` | `24 passed` targeted; `109 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 8 — Memory | `VERIFIED` | `7 passed` targeted; `31 passed` affected; `116 passed` full; `compileall` passed; audit `COMPLIANT`. |
-| FASE 9 — Knowledge Base | `NOT_STARTED` | — |
+| FASE 9 — Knowledge Base | `VERIFIED` | `14 passed` targeted; `45 passed` affected; `130 passed` full; `compileall` passed; independent audit `COMPLIANT`. |
 | FASE 10 — Inference Engine | `NOT_STARTED` | — |
 | FASE 11 — Planner | `NOT_STARTED` | — |
 | FASE 12 — Strategy | `NOT_STARTED` | — |
@@ -49,21 +49,22 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 8 — Memory.
-- Completed acceptance criteria: Added `AgentMemory` with known position and
-  direction, visited rooms, chronological perception history, historically
-  perceived gold rooms, traveled path, executed actions, observed score, and
-  collected-gold count. Integrated it into the temporary agent through only
-  `AgentObservation` and `ActionResult`, including transient `bump` and `scream`.
-- Remaining acceptance criteria: None for FASE 8. Derived safe/unknown/frontier
-  and hazard knowledge remains intentionally assigned to FASE 9.
-- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_memory.py
-  -q`; `.venv/bin/python -m pytest tests/unit/test_simple_agent.py
-  tests/unit/test_engine.py tests/unit/test_memory.py -q`; `.venv/bin/python -m
-  pytest -q`; `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `7 passed`; affected tests `31 passed`; full suite
-  `116 passed`; compilation exit 0; verification `PASS`; specification compliance
-  `COMPLIANT`.
+- Last completed phase: FASE 9 — Knowledge Base.
+- Completed acceptance criteria: Added the independent 6×6 logical map with
+  visited, safe, unknown, exploration frontier, possible and confirmed hazards,
+  explicit negative knowledge, immutable `KnownCell` snapshots, monotonic
+  conflict-checked transitions, dead-Wumpus state, and `knowledge_revision`.
+- Remaining acceptance criteria: None for FASE 9. Sensor rules, intersection,
+  elimination, and fixed-point inference remain intentionally assigned to FASE 10.
+- Last verified commands: `.venv/bin/python -m pytest
+  tests/unit/test_knowledge.py -q`; `.venv/bin/python -m pytest
+  tests/unit/test_knowledge.py tests/unit/test_memory.py
+  tests/unit/test_simple_agent.py tests/unit/test_engine.py -q`;
+  `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`.
+- Result: Targeted tests `14 passed`; affected tests `45 passed`; full suite
+  `130 passed`; compilation exit 0; verification `PASS`; independent logic and
+  specification reviews `COMPLIANT` after adding the required dead-Wumpus
+  transition.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -72,22 +73,25 @@ rename, merge, or reorder phases.
 ## Files changed in current phase
 
 - `src/wumpus/agent/__init__.py`
+- `src/wumpus/agent/knowledge.py`
 - `src/wumpus/agent/memory.py`
 - `src/wumpus/agent/simple_agent.py`
+- `tests/unit/test_knowledge.py`
 - `tests/unit/test_memory.py`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 31: `AgentMemory` retains the observable episodic state needed before
-  knowledge inference: current pose, visits, perceptions, gold facts, path,
-  actions, score, and inventory count.
-- Sections 57–59 and 123–124: memory consumes only the reduced observation and
-  action-result DTOs; the agent package still has no environment or hidden-map
-  dependency.
-- Section 119 FASE 8: the running agent now remembers observations and action
-  results without implementing the derived knowledge assigned to FASE 9.
+- Sections 32–33 and 39: the base separates every hazard type, explicit
+  negatives, and safe cells that exclude all three hazards.
+- Sections 31, 41, and 129: `AgentMemory` owns an independent logical map with
+  visited/unknown classifications, bounded frontier, and immutable cell views.
+- Sections 107 and 131–133: relevant changes increment a revision exactly once,
+  repetition is idempotent, contradictions fail closed, dead Wumpus transition
+  out of confirmed state, and confirmed bats remain hazardous.
+- Sections 57–59, 119 FASE 9, and 123–124: the base is integrated only through
+  observable memory facts and has no environment or hidden-map dependency.
 
 ## Current blockers
 
@@ -97,7 +101,10 @@ rename, merge, or reorder phases.
 
 - Ruff is not configured or installed, and its use is optional in section 121.
 - `SimpleAgent` remains intentionally non-intelligent; it now has episodic
-  memory but no inference, planning, or risk evaluation.
+  memory and a logical knowledge store but no inference, planning, or risk
+  evaluation.
+- The negative-perception scenario in section 96 is not automatic yet; applying
+  sensor rules belongs to FASE 10 rather than the FASE 9 storage model.
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
@@ -109,8 +116,9 @@ rename, merge, or reorder phases.
 
 ## Next action
 
-Begin FASE 9 — Knowledge Base by implementing safe, visited, unknown, frontier,
-possible/confirmed hazards, negative knowledge, and the independent logical map.
+Begin FASE 10 — Inference Engine by applying negative/presence sensor rules,
+candidate intersections, elimination, confirmation, safety, and bounded
+fixed-point updates over the verified Knowledge Base.
 
 ## Checkpoint update contract
 
@@ -132,6 +140,6 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 8 — Memory verified after focused and affected tests, full
-regression, source compilation, anti-cheat verification, and specification
-compliance.
+2026-09-24 — FASE 9 — Knowledge Base verified after focused and affected tests,
+full regression, source compilation, anti-cheat verification, and independent
+critical-phase logic/specification reviews.
