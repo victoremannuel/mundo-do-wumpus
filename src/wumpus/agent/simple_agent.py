@@ -20,11 +20,12 @@ _TURN_ACTIONS = (Action.TURN_LEFT, Action.TURN_RIGHT)
 class SimpleAgent:
     """Update agent-owned knowledge, then apply the decision hierarchy.
 
-    Inference, planning, and hunting use reduced observations only. When the
-    strategy finds no known-safe target and no confirmed Wumpus worth
-    shooting (priorities 6-7: risk-based choice and forced return require
-    FASE 14), a bounded random fallback keeps the agent moving without
-    claiming those later priorities.
+    Inference, planning, hunting, and least-risk fallback (priorities 1-7)
+    use reduced observations only. A bounded random fallback only remains
+    for the residual gap `Strategy.decide` leaves on purpose: full
+    exit-policy reasoning (section 45-46) is FASE 15's scope, so at the
+    start cell with nothing left to explore or risk, the agent still has no
+    directed action to take.
     """
 
     def __init__(

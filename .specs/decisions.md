@@ -139,6 +139,73 @@ Section 44 priority 5; `src/wumpus/agent/strategy.py::Strategy._hunt`;
 review on 2026-09-24 (flagged as MEDIUM, accepted as a defensible
 simplification pending FASE 14).
 
+## DEC-005 — Risk threshold stays a single constant; the priority cascade falls through on a failed route
+
+Date: 2026-09-25
+Status: ACCEPTED
+Affected phase(s): FASE 14 — Risk engine
+
+Context:
+Section 44 priorities 6-7 give `Strategy` a least-risk fallback and a
+forced-return trigger, scored per section 43. Sections 47-48, under the
+separate "POLÍTICA DE SAÍDA" heading (sections 45-48), say the agent should
+accept more risk before finding any gold and weigh score preservation more
+heavily after. Independent specification and logic review on 2026-09-25
+raised two related questions: (1) whether `risk.RISK_THRESHOLD` must be
+gold-conditioned to satisfy sections 47-48, and (2) whether `Strategy.decide`
+correctly reaches priorities 5-7 in every case they should apply, including
+while holding gold.
+
+Decision:
+`risk.RISK_THRESHOLD` remains a single, non-gold-conditioned constant
+(`HAZARD_RISK_WEIGHTS[WUMPUS]`); sections 47-48's differing risk tolerance
+before/after gold is left to FASE 15 to implement as part of its exit-policy
+work. Separately, `Strategy.decide`'s priority 2 (return-to-start-and-climb)
+and priority 3/4 (route to the nearest unexplored cell) branches were fixed
+to only return early when their own `_pursue` call actually produces an
+action; when the chosen route has no safe path (e.g. an unclassified gap
+disconnects the safe region, or the way home is blocked), `decide` now falls
+through to priorities 5-7 instead of returning `None` outright -- including
+while the agent holds gold, since section 45's fourth exit condition ("não
+existem novas células alcançáveis com risco aceitável") and section 48 both
+describe exactly that risk/reward tradeoff.
+
+Reason:
+Sections 47-48 sit under the "política de saída" heading (sections 45-48),
+distinct from section 44's risk-engine priorities, and the FASE ledger
+itself separates "FASE 14 — Risk engine" (menor risco) from "FASE 15 —
+Política de saída" (retorno racional); gold-conditioning the threshold now
+would be unreachable, untested code given `Strategy`'s own priority-2
+precedent (already `VERIFIED` in FASE 12), which is exactly the code smell
+`AGENTS.md`'s scope-control rules warn against. The fallthrough fix, in
+contrast, is not a new priority-6/7 feature but a correction to already
+existing FASE 12/13 control flow: returning `_pursue`'s result unconditionally
+whenever some priority-2/3/4 target was merely *attempted* silently discarded
+every lower priority the moment a chosen route turned out unreachable, which
+independent logic review confirmed as a concrete, reachable defect (not
+gold-specific) with a deterministic repro. Making every priority branch
+consistently fall through only on a real `None` result closes that gap and,
+as a direct consequence, also resolves the specification review's flagged
+gold-plus-blocked-route-home gap without inventing new gold-conditioned
+risk logic.
+
+Consequences:
+A gold-holding agent whose route home is blocked may still shoot a confirmed
+Wumpus (priority 5) or accept a `RISK_THRESHOLD`-bounded risk (priority 6)
+to clear the way, using the same threshold it would use without gold; it
+does not yet weigh score preservation more heavily after finding gold, which
+remains a known limitation until FASE 15. `test_strategy_declines_a_risk_above_the_threshold_and_returns_to_start`
+and the existing priority-2/3/4 tests continue to pass unchanged, since none
+of them previously depended on the unconditional-return behavior.
+
+Evidence:
+Sections 43-45, 47-48 FASE 14/15; `src/wumpus/agent/strategy.py::Strategy.decide`,
+`Strategy._explore_at_risk`; `src/wumpus/agent/risk.py::RISK_THRESHOLD`;
+independent specification and logic review on 2026-09-25 (specification
+review: `PARTIALLY_COMPLIANT`, missing this record and flagging the gold
+fallthrough gap; logic review: one CONFIRMED HIGH-severity control-flow bug
+with a deterministic repro, fixed by the same change).
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

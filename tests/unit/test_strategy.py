@@ -257,9 +257,62 @@ def test_strategy_skips_an_unreachable_target_for_a_reachable_one() -> None:
     assert strategy._target == Position(9, 1)
 
 
-def test_strategy_ignores_unsafe_cells_when_no_frontier_is_reachable() -> None:
-    knowledge = safe_knowledge(3, 3, [Position(1, 1)])
-    knowledge.mark_possible(Position(1, 2), EntityType.PIT)
+def test_strategy_falls_through_to_risk_when_every_unexplored_cell_is_unreachable() -> None:
+    # (2, 1) is a "safe" unexplored cell, but the gap at (3, 1)/(4, 1) is
+    # fully unclassified, so no safe route reaches it. Priorities 3/4 must
+    # not swallow the turn: priority 6 should still take the reachable,
+    # in-threshold risk candidate at (6, 1) instead of giving up.
+    knowledge = KnowledgeBase(10, 1)
+    knowledge.mark_visited(Position(5, 1))
+    knowledge.mark_safe(Position(5, 1))
+    knowledge.mark_safe(Position(2, 1))
+    knowledge.mark_possible(Position(6, 1), EntityType.BAT)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(5, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert action is not None
+    assert strategy._target == Position(6, 1)
+
+
+def test_strategy_falls_through_to_risk_when_the_way_home_is_blocked_with_gold() -> None:
+    # The agent holds gold and has nothing left proven-safe to explore, but
+    # the route back to the start cell is broken by an unclassified gap.
+    # Priority 2 must not give up outright: a reachable, in-threshold risk
+    # candidate should still be taken to try to clear the way.
+    knowledge = KnowledgeBase(10, 1)
+    knowledge.mark_visited(START_POSITION)
+    knowledge.mark_safe(START_POSITION)
+    knowledge.mark_visited(Position(5, 1))
+    knowledge.mark_safe(Position(5, 1))
+    knowledge.mark_possible(Position(6, 1), EntityType.BAT)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(5, 1),
+        direction=Direction.NORTH,
+        collected_gold=1,
+        glitter=False,
+    )
+
+    assert action is not None
+    assert strategy._target == Position(6, 1)
+
+
+def test_strategy_ignores_an_unsafe_cell_that_is_not_reachable() -> None:
+    # (5, 5) is a possible-pit candidate, but it is not adjacent to any cell
+    # reachable from (1, 1) through proven-safe cells, so it is never a
+    # valid priority-6 target; with nothing else to do, priority 7 tries to
+    # return to the start cell, which is a no-op since it is already there.
+    knowledge = safe_knowledge(5, 5, [Position(1, 1)])
+    knowledge.mark_possible(Position(5, 5), EntityType.PIT)
     strategy = Strategy()
 
     action = strategy.decide(
@@ -436,3 +489,86 @@ def test_strategy_confirm_kill_does_not_attribute_through_an_unclassified_cell()
 
     assert Position(4, 1) not in knowledge.dead_wumpus
     assert Position(4, 1) in knowledge.confirmed_wumpus
+
+
+def test_strategy_prioritizes_the_lowest_scoring_risk_candidate() -> None:
+    # (2, 1) is a possible-pit candidate (score 3); (1, 2) is a
+    # possible-bat candidate (score 2). Priority 6 must prefer the cheaper
+    # one even though it is not the nearer one by plain distance ordering.
+    knowledge = safe_knowledge(3, 3, [Position(1, 1)])
+    knowledge.mark_possible(Position(2, 1), EntityType.PIT)
+    knowledge.mark_possible(Position(1, 2), EntityType.BAT)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert action is not None
+    assert strategy._target == Position(1, 2)
+
+
+def test_strategy_steps_into_the_chosen_risk_candidate_after_turning() -> None:
+    knowledge = safe_knowledge(3, 3, [Position(1, 1)])
+    knowledge.mark_possible(Position(1, 2), EntityType.BAT)
+    strategy = Strategy()
+
+    first = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+    # Simulate the turn from `first` having been applied by the environment.
+    second = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.EAST,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert first is Action.TURN_RIGHT
+    assert second is Action.MOVE_FORWARD
+
+
+def test_strategy_declines_a_risk_above_the_threshold_and_returns_to_start() -> None:
+    # (3, 1) is a candidate for both a pit and a Wumpus (score 3 + 4 = 7),
+    # above `risk.RISK_THRESHOLD` (4): priority 6 must not take that risk,
+    # and priority 7 routes back toward the start cell instead.
+    knowledge = safe_knowledge(5, 1, [Position(1, 1), Position(2, 1)])
+    knowledge.mark_possible(Position(3, 1), EntityType.PIT)
+    knowledge.mark_possible(Position(3, 1), EntityType.WUMPUS)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(2, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert action is not None
+    assert strategy._target == START_POSITION
+
+
+def test_strategy_never_treats_a_confirmed_danger_cell_as_a_risk_candidate() -> None:
+    knowledge = safe_knowledge(3, 1, [Position(1, 1)])
+    knowledge.mark_confirmed(Position(2, 1), EntityType.PIT)
+    strategy = Strategy()
+
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert action is None
