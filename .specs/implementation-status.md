@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 19 — Integration tests (`VERIFIED`)
+FASE 20 — E2E (`VERIFIED`)
 
 ## Phase ledger
 
@@ -40,7 +40,7 @@ rename, merge, or reorder phases.
 | FASE 17 — Debug | `VERIFIED` | `5 passed` targeted; `48 passed` affected; `233 passed` full; `compileall`, deterministic snapshots, and anti-cheat checks passed; specification audit `COMPLIANT`. |
 | FASE 18 — CLI | `VERIFIED` | `7 passed` targeted; `240 passed` full; `compileall` passed; deterministic seed replay, `--debug`/`--step`/`--no-delay` manual smoke checks passed; specification audit `COMPLIANT`. |
 | FASE 19 — Integration tests | `VERIFIED` | `2 passed` targeted; `4 passed` integration/determinism/antitrapaça; `242 passed` full; `compileall` passed; independent specification and test audits `COMPLIANT`/`PASS`. |
-| FASE 20 — E2E | `NOT_STARTED` | — |
+| FASE 20 — E2E | `VERIFIED` | `10 passed` targeted; `14 passed` affected; `252 passed` full; 100-seed stress completed without exceptions; independent specification/test audits `COMPLIANT`/`PASS`. |
 | FASE 21 — README final | `NOT_STARTED` | — |
 
 ## Current checkpoint
@@ -49,29 +49,28 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 19 — Integration tests.
-- Completed acceptance criteria: Added a dedicated integration suite that runs
-  the production `GeneratedMap -> World -> SimpleAgent -> GameEngine` stack,
-  without doubles, against two deterministic known maps. The first proves
-  autonomous exploration, gold collection, score propagation, return to
-  `[1,1]`, and `CLIMB`. The mixed map proves perception-driven inference,
-  confirmed-pit avoidance, confirmed-Wumpus hunting/death reconciliation,
-  gold collection, score propagation, safe return, and escape. Tests construct
-  hidden maps as fixtures but never pass them to the agent; the engine keeps
-  `AgentObservation`/`ActionResult` as the only runtime information surfaces.
-- Remaining acceptance criteria: None for FASE 19.
+- Last completed phase: FASE 20 — E2E.
+- Completed acceptance criteria: Added a fixed-seed E2E matrix using the plan's
+  ten example seeds (`1`, `2`, `3`, `10`, `20`, `42`, `100`, `123`, `999`,
+  `2026`). Every case constructs the production procedural map, real `World`,
+  unmodified `SimpleAgent`, and `GameEngine`; runs to a bounded terminal
+  `GameStatus`; then replays from the same seed and compares the complete
+  `GameOutcome` for determinism.
+- Remaining acceptance criteria: None for FASE 20.
 - Last verified commands: `.venv/bin/python -m pytest
-  tests/integration/test_known_maps.py -q`; `.venv/bin/python -m pytest
-  tests/integration/test_known_maps.py
+  tests/e2e/test_seeded_games.py -q`; `.venv/bin/python -m pytest
+  tests/e2e/test_seeded_games.py tests/integration/test_known_maps.py
   tests/unit/test_simple_agent.py::test_agent_package_never_imports_the_environment_or_hidden_map_types
   tests/unit/test_engine.py::test_seeded_games_with_the_simple_agent_are_reproducible
-  -q`; `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src
-  main.py`; `git diff --check`.
-- Result: targeted `2 passed`; integration/determinism/antitrapaça `4 passed`;
-  full suite `242 passed` (up from 240); compilation exited 0. Ruff was not
-  installed/configured. Independent specification and architecture review was
-  `COMPLIANT` after state persistence, and independent test review was `PASS`;
-  its score-propagation recommendation was incorporated before final evidence.
+  -q`; 100-seed generated-map stress script; `.venv/bin/python -m pytest -q`;
+  `.venv/bin/python -m compileall -q src main.py`; `git diff --check`.
+- Result: targeted `10 passed`; E2E/integration/determinism/antitrapaça
+  `14 passed`; full suite `252 passed` (up from 242); compilation exited 0.
+  The 100-seed stress run completed without exceptions or invalid-state
+  assertions: 84 `ESCAPED`, 12 `DEAD`, 4 `TURN_LIMIT`, maximum 2000 turns.
+  Ruff remains unconfigured/not installed. Independent specification review
+  was `COMPLIANT`, and independent test review was `PASS`; neither found a
+  blocker to verification.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -79,22 +78,21 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `tests/integration/test_known_maps.py` (new)
+- `tests/e2e/test_seeded_games.py` (new)
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 119, FASE 19: the unmodified real logical agent runs through the real
-  engine and environment against multiple known maps, with assertions on
-  terminal behavior and agent-owned knowledge rather than smoke-only execution.
-- Sections 57-60: integration preserves the antitrapaça boundary; known hidden
-  state exists only in the test fixture and environment, while `SimpleAgent`
-  receives reduced observations/results through `GameEngine`.
-- Sections 134-135: integrated scenarios prove autonomy, perception/inference,
-  safe planning, confirmed-danger avoidance, rational shooting, gold
-  collection, synchronized scoring, return to the exit, and successful climb.
-- Section 137: the complete pytest suite remains green with zero failures.
+- Sections 104 and 119, FASE 20: all ten fixed seeds execute the production
+  autonomous stack to a bounded terminal status without exceptions.
+- Sections 8, 105, and 126: every seed is replayed with injected RNG state;
+  complete outcomes match and every run ends in at most `MAX_TURNS` (2000).
+- Sections 124 and 137: the E2E matrix detects uncaught errors or unbounded
+  execution, while the complete pytest suite remains green with zero failures.
+- Section 138: a separate 100-seed stress run completed without crashes or
+  invalid-state assertions; victory in every map was intentionally not
+  required.
 
 ## Current blockers
 
@@ -130,15 +128,17 @@ rename, merge, or reorder phases.
   exists today; noted by the FASE 18 specification review as a LOW,
   non-blocking observation for future attention if that parameter ever
   becomes load-bearing.
-- FASE 19 intentionally uses two deterministic known maps and does not add a
-  multi-seed generated-map matrix, which belongs to FASE 20. Bat teleport and
-  lethal-map integration remain covered at unit/component level rather than by
-  this phase's known-map scenarios.
+- The 100-seed stress run reached `TURN_LIMIT` on 4 maps. This is a bounded,
+  plan-defined terminal status rather than a crash; explicit cycle detection,
+  `knowledge_revision`, and objective blacklisting from sections 106-108 remain
+  unimplemented technical debt already documented above.
 
 ## Next action
 
-Begin FASE 20 — E2E: execute the production game over at least 10 fixed seeds,
-prove bounded termination without exceptions, and keep deterministic evidence.
+Begin FASE 21 — README final: document the plan-required architecture,
+behavior, PEAS model, execution modes, tests, examples, and limitations. Do
+not alter production behavior unless the documentation audit exposes a real
+defect.
 
 ## Checkpoint update contract
 
@@ -160,9 +160,8 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-25 — FASE 19 — Integration tests verified: added two known-map tests
-running the unmodified `SimpleAgent`, `World`, and `GameEngine` together. They
-prove gold collection/return plus mixed-map inference, confirmed-pit avoidance,
-Wumpus hunting, synchronized scoring, and escape without hidden-state leakage.
-Targeted `2 passed`, full `242 passed`, compilation passed, and independent
-specification/test audits were `COMPLIANT`/`PASS`.
+2026-09-25 — FASE 20 — E2E verified: added ten deterministic fixed-seed
+runs over the complete production game, each replayed to prove identical final
+outcomes. Targeted `10 passed`, affected `14 passed`, full `252 passed`,
+compilation passed, and a separate 100-seed stress run completed without
+exceptions. Independent specification/test audits were `COMPLIANT`/`PASS`.
