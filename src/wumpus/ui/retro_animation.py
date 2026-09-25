@@ -81,6 +81,7 @@ class AnimationKind(Enum):
     BUMP = auto()
     DEATH = auto()
     ESCAPE = auto()
+    EXIT_BLOCKED = auto()
     SENSORS = auto()
 
 
@@ -98,6 +99,7 @@ FRAME_COUNTS = MappingProxyType(
         AnimationKind.BUMP: 4,  # 320 ms
         AnimationKind.DEATH: 7,  # 560 ms
         AnimationKind.ESCAPE: 6,  # 480 ms
+        AnimationKind.EXIT_BLOCKED: 4,  # 320 ms
         AnimationKind.SENSORS: 6,  # 480 ms
     }
 )
@@ -108,6 +110,7 @@ BANNER_DEAD = "GAME OVER"
 BANNER_TELEPORT = "MORCEGO!"
 BANNER_BUMP = "PAREDE!"
 BANNER_GOLD = "OURO!"
+BANNER_EXIT_BLOCKED = "SAÍDA BLOQUEADA — OURO PENDENTE"
 INTRO_BANNERS = ("READY", "READY", "3", "2", "1", "EXPLORE", "EXPLORE", "")
 
 
@@ -469,6 +472,22 @@ def _escape_frames(event: AnimationEvent) -> list[AnimationFrame]:
     ]
 
 
+def _exit_blocked_frames(event: AnimationEvent) -> list[AnimationFrame]:
+    position = event.position
+    styles = ("bright_green", "yellow", "red", "bright_green")
+    return [
+        _frame(
+            AnimationKind.EXIT_BLOCKED,
+            banner=BANNER_EXIT_BLOCKED,
+            border_flash=styles[index],
+            overlay=MapOverlay(
+                cell_flash=() if position is None else ((position, styles[index]),),
+            ),
+        )
+        for index in range(event.frames)
+    ]
+
+
 def _sensor_frames(event: AnimationEvent) -> list[AnimationFrame]:
     """One frame list carrying every active sensor's phase, so they run together."""
 
@@ -494,6 +513,7 @@ _EXPANDERS = {
     AnimationKind.BUMP: _bump_frames,
     AnimationKind.DEATH: _death_frames,
     AnimationKind.ESCAPE: _escape_frames,
+    AnimationKind.EXIT_BLOCKED: _exit_blocked_frames,
     AnimationKind.SENSORS: _sensor_frames,
 }
 
@@ -668,6 +688,8 @@ def build_turn_events(
             )
         if result.gold_collected:
             events.append(AnimationEvent(kind=AnimationKind.GRAB, position=position))
+        if result.exit_blocked:
+            events.append(AnimationEvent(kind=AnimationKind.EXIT_BLOCKED, position=position))
 
     labels = sensors_to_animate(
         perception,

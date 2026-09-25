@@ -33,6 +33,12 @@ class GameConfig:
     bat_count: int = 2
 
     @property
+    def exit_position(self) -> Position:
+        """The public, protected exit in the far corner of this map."""
+
+        return exit_position_for(self.rows, self.cols)
+
+    @property
     def entity_total(self) -> int:
         """How many entities this configuration asks the generator to place."""
 
@@ -45,13 +51,26 @@ class GameConfig:
 
 
 def available_entity_cells(rows: int, cols: int) -> int:
-    """Rooms a map of this size can hold entities in, safe zone excluded.
+    """Rooms a map of this size can hold entities in, protected cells excluded.
 
     Single source of truth for the capacity both the generator and the pre-game
     configuration screen check, so the limit can never drift between the two.
     """
 
-    protected = sum(
-        position.is_inside(rows, cols) for position in SAFE_INITIAL_CELLS
+    return rows * cols - len(protected_cells(rows, cols))
+
+
+def exit_position_for(rows: int, cols: int) -> Position:
+    """Return the single structural exit for any valid map dimensions."""
+
+    return Position(rows, cols)
+
+
+def protected_cells(rows: int, cols: int) -> frozenset[Position]:
+    """Return all in-bounds rooms that map generation must keep empty."""
+
+    return frozenset(
+        position
+        for position in (*SAFE_INITIAL_CELLS, exit_position_for(rows, cols))
+        if position.is_inside(rows, cols)
     )
-    return rows * cols - protected

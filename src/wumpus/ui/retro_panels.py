@@ -15,6 +15,7 @@ from rich.text import Text
 from wumpus.agent.reasoning import DecisionReason
 from wumpus.domain import Direction, Perception, Position
 from wumpus.game.config import GameConfig
+from wumpus.game.objective import GameObjective
 from wumpus.game.engine import GameOutcome
 from wumpus.ui.retro_animation import (
     sensor_is_emphasised,
@@ -55,7 +56,7 @@ AUTONOMOUS_CONTROLS = (
     "[P] PAUSE  [N] STEP  [D] DEBUG  [-] SLOWER  [+] FASTER  [R] RESTART  [Q] QUIT"
 )
 MANUAL_CONTROLS = (
-    "[↑] MOVER  [←/→] VIRAR  [G] PEGAR  [F] ATIRAR  [E] SUBIR"
+    "[↑] MOVER  [←/→] VIRAR  [G] PEGAR  [F] ATIRAR"
     "  [D] DEBUG  [R] RESTART  [Q] QUIT"
 )
 CONTROLS = AUTONOMOUS_CONTROLS
@@ -93,6 +94,7 @@ _LEGEND_ROWS = (
     (("VISITADO", TileKind.VISITED), ("POÇO", TileKind.PIT)),
     (("DESCONHECIDO", TileKind.UNKNOWN), ("MORCEGO", TileKind.BAT)),
     ((None, None), ("OURO", TileKind.GOLD)),
+    (("INÍCIO", TileKind.START), ("SAÍDA", TileKind.EXIT)),
 )
 _LEGEND_LABEL_WIDTH = 13
 _LEGEND_COLUMN_WIDTH = LEGEND_ICON_WIDTH + 1 + _LEGEND_LABEL_WIDTH
@@ -159,17 +161,25 @@ def render_agent_status(
     debug_enabled: bool,
     mode: GameMode = GameMode.AUTONOMOUS,
     config: GameConfig | None = None,
+    objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,
 ) -> Text:
     """Build the agent HUD, including execution state the player controls."""
 
     text = Text(no_wrap=True, overflow="ellipsis")
+    game_config = config if config is not None else GameConfig()
     _append_field(text, "POS", format_position(snapshot.position))
     _append_field(text, "DIR", DIRECTION_NAMES[snapshot.direction])
-    _append_field(text, "OURO", str(snapshot.collected_gold))
+    _append_field(text, "OURO", f"{snapshot.collected_gold} / {game_config.gold_count}")
     _append_field(text, "SCORE", str(snapshot.score))
     _append_field(text, "TURNOS", str(turns))
     _append_field(text, "MODO", MODE_LABELS[mode])
-    game_config = config if config is not None else GameConfig()
+    objective_label = (
+        "ESCAPAR RÁPIDO"
+        if objective is GameObjective.ESCAPE_FAST
+        else "TODOS OS OUROS"
+    )
+    _append_field(text, "OBJETIVO", objective_label)
+    _append_field(text, "SAÍDA", format_position(game_config.exit_position))
     _append_field(
         text,
         "W/P/G/B",
@@ -252,7 +262,14 @@ def render_footer(
     return text
 
 
-def render_endgame(outcome: GameOutcome, seed: int | None) -> Text:
+def render_endgame(
+    outcome: GameOutcome,
+    seed: int | None,
+    *,
+    mode: GameMode = GameMode.AUTONOMOUS,
+    objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,
+    config: GameConfig | None = None,
+) -> Text:
     """Build the final summary shown once the engine reports the game is over."""
 
     status = outcome.status.name
@@ -264,12 +281,21 @@ def render_endgame(outcome: GameOutcome, seed: int | None) -> Text:
         status,
         value_style=RETRO_OUTCOME_STYLES.get(status, RETRO_VALUE_STYLE),
     )
+    _append_field(text, "MODO", MODE_LABELS[mode])
+    _append_field(
+        text,
+        "OBJETIVO",
+        "ESCAPAR RÁPIDO" if objective is GameObjective.ESCAPE_FAST else "TODOS OS OUROS",
+    )
     _append_field(text, "SCORE", str(outcome.score))
     _append_field(text, "GOLD", str(outcome.collected_gold))
     _append_field(text, "WUMPUS", str(outcome.killed_wumpus))
     _append_field(text, "TURNS", str(outcome.turns))
     _append_field(text, "VISITED", str(outcome.visited_cells))
     _append_field(text, "SEED", "ALEATÓRIA" if seed is None else str(seed))
+    game_config = config if config is not None else GameConfig()
+    _append_field(text, "INÍCIO", format_position(Position(1, 1)))
+    _append_field(text, "SAÍDA", format_position(game_config.exit_position))
     text.append("\n[Q] EXIT", style=RETRO_TEXT_DIM)
     return text
 

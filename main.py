@@ -29,7 +29,7 @@ from wumpus.agent import HumanAgent, SimpleAgent
 from wumpus.debug.renderer import DebugRenderer
 from wumpus.domain import AgentObservation
 from wumpus.environment import MapGenerator, World
-from wumpus.game import GameConfig, GameEngine, GameOutcome, GameStatus
+from wumpus.game import GameConfig, GameEngine, GameObjective, GameOutcome, GameStatus
 from wumpus.ui.console import ConsoleRenderer
 from wumpus.ui.retro_state import (
     DEFAULT_INTERVAL,
@@ -78,15 +78,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def build_game(
-    seed: int | None, config: GameConfig | None = None
+    seed: int | None,
+    config: GameConfig | None = None,
+    objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,
 ) -> tuple[World, SimpleAgent]:
     """Assemble one real world and one isolated agent from a single seed."""
 
     rng = random.Random(seed)
     game_config = config if config is not None else GameConfig()
     generated_map = MapGenerator(rng, game_config).generate()
-    world = World(generated_map, rng=rng)
-    agent = SimpleAgent(rng, game_config)
+    world = World(generated_map, rng=rng, objective=objective)
+    agent = SimpleAgent(rng, game_config, objective=objective)
     return world, agent
 
 
@@ -101,14 +103,14 @@ def build_session(settings: object) -> object:
     config = settings.config
     rng = random.Random(settings.seed)
     generated_map = MapGenerator(rng, config).generate()
-    world = World(generated_map, rng=rng)
+    world = World(generated_map, rng=rng, objective=settings.objective)
 
     if settings.mode is GameMode.MANUAL:
         agent = HumanAgent(config)
         submitter = agent.queue_action
         clearer = agent.clear_pending_action
     else:
-        agent = SimpleAgent(rng, config)
+        agent = SimpleAgent(rng, config, objective=settings.objective)
         submitter = None
         clearer = None
 

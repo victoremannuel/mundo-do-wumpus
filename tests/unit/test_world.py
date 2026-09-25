@@ -5,6 +5,7 @@ import pytest
 
 from wumpus.domain import Action, Direction, EntityType, Position
 from wumpus.environment import GeneratedMap, INVALID_CLIMB_EVENT, World
+from wumpus.game import GameObjective
 from wumpus.environment.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 
 
@@ -34,13 +35,14 @@ def move_to_center(world: World, *, avoid_south: bool = False) -> None:
     world.execute(Action.MOVE_FORWARD)
 
 
-def test_world_starts_at_exit_facing_north_with_zero_score() -> None:
+def test_world_starts_at_start_facing_north_with_zero_score() -> None:
     world = world_with()
 
     assert world.agent_position == Position(1, 1)
     assert world.agent_direction is Direction.NORTH
     assert world.score == 0
     assert world.collected_gold == 0
+    assert world.exit_position == Position(6, 6)
     assert world.game_over is False
     assert world.escaped is False
     assert world.dead is False
@@ -162,17 +164,17 @@ def test_grab_collects_and_removes_gold_with_combined_score() -> None:
     assert world.collected_gold == 1
 
 
-def test_climb_escapes_only_from_start_position() -> None:
-    at_exit = world_with()
+def test_climb_never_escapes_from_start_or_elsewhere() -> None:
+    at_start = world_with()
     away_from_exit = world_with()
 
-    escaped = at_exit.execute(Action.CLIMB)
+    climbed = at_start.execute(Action.CLIMB)
     away_from_exit.execute(Action.MOVE_FORWARD)
     did_not_escape = away_from_exit.execute(Action.CLIMB)
 
-    assert escaped.escaped is True
-    assert escaped.total_score == -1
-    assert at_exit.game_over is True
+    assert climbed.escaped is False
+    assert climbed.total_score == -1
+    assert at_start.game_over is False
     assert did_not_escape.escaped is False
     assert away_from_exit.game_over is False
     assert away_from_exit.score == -2

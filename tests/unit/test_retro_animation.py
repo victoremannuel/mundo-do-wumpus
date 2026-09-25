@@ -7,6 +7,7 @@ import pytest
 
 from wumpus.domain import Action, ActionResult, Direction, Perception, Position
 from wumpus.ui.retro_animation import (
+    BANNER_EXIT_BLOCKED,
     FRAME_COUNTS,
     AnimationController,
     AnimationKind,
@@ -68,6 +69,7 @@ def test_initial_active_sensors_are_queued_after_the_intro_by_the_screen() -> No
      ({"gold_collected": True}, AnimationKind.GRAB),
      ({"died": True}, AnimationKind.DEATH),
      ({"escaped": True}, AnimationKind.ESCAPE),
+     ({"exit_blocked": True}, AnimationKind.EXIT_BLOCKED),
      ({"wumpus_killed": True}, AnimationKind.WUMPUS_KILLED)),
 )
 def test_reported_special_results_create_their_specific_effect(
@@ -79,6 +81,45 @@ def test_reported_special_results_create_their_specific_effect(
         bounds=(6, 6),
     )
     assert kind in {event.kind for event in events}
+
+
+def test_a_blocked_exit_warns_about_pending_gold_without_ending_the_game() -> None:
+    """Reaching the exit too early is feedback, never a terminal result."""
+
+    result = make_result(Action.MOVE_FORWARD, exit_blocked=True)
+    events = build_turn_events(
+        result, previous_position=Position(1, 1), previous_perception=None,
+        bounds=(6, 6),
+    )
+    frames = expand_events(events)
+    blocked = [
+        frame for frame in frames if AnimationKind.EXIT_BLOCKED in frame.kinds
+    ]
+
+    assert len(blocked) == FRAME_COUNTS[AnimationKind.EXIT_BLOCKED]
+    assert {frame.banner for frame in blocked} == {BANNER_EXIT_BLOCKED}
+    assert "OURO PENDENTE" in BANNER_EXIT_BLOCKED
+    # A warning flashes and clears; it must never be confused with an escape.
+    assert AnimationKind.ESCAPE not in {event.kind for event in events}
+    assert len({frame.border_flash for frame in blocked}) > 1
+
+
+def test_the_escape_effect_plays_on_whatever_room_the_result_reports() -> None:
+    """The victory room is the far-corner exit now, so nothing may assume [1,1]."""
+
+    result = ActionResult(
+        action=Action.MOVE_FORWARD, position=Position(6, 6), direction=Direction.NORTH,
+        score_delta=-1, total_score=-1,
+        perception=Perception(False, False, False, False, False, False),
+        escaped=True,
+    )
+    events = build_turn_events(
+        result, previous_position=Position(6, 5), previous_perception=None,
+        bounds=(6, 6),
+    )
+    escape = [event for event in events if event.kind is AnimationKind.ESCAPE]
+
+    assert [event.position for event in escape] == [Position(6, 6)]
 
 
 def test_shot_animation_runs_to_the_wall_not_a_hidden_impact_coordinate() -> None:

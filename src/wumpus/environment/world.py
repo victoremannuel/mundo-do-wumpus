@@ -23,11 +23,13 @@ from wumpus.environment.bats import (
 )
 from wumpus.environment.generator import GeneratedMap
 from wumpus.environment.sensors import sense
-from wumpus.game.config import START_DIRECTION, START_POSITION
+from wumpus.game.config import START_DIRECTION, START_POSITION, exit_position_for
+from wumpus.game.objective import GameObjective
 from wumpus.game.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 
 
-INVALID_CLIMB_EVENT = "Tentativa inválida de saída."
+INVALID_CLIMB_EVENT = "A saída é automática somente na célula final."
+EXIT_BLOCKED_EVENT = "SAÍDA BLOQUEADA"
 
 
 @dataclass(frozen=True)
@@ -54,12 +56,20 @@ class DebugWorldSnapshot:
 class World:
     """Own the hidden map and apply environment rules to agent actions."""
 
-    def __init__(self, generated_map: GeneratedMap, *, rng: random.Random) -> None:
+    def __init__(
+        self,
+        generated_map: GeneratedMap,
+        *,
+        rng: random.Random,
+        objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,
+    ) -> None:
         if not START_POSITION.is_inside(generated_map.rows, generated_map.cols):
             raise ValueError("Generated map does not contain the start position")
 
         self._rows = generated_map.rows
         self._cols = generated_map.cols
+        self._exit_position = exit_position_for(self._rows, self._cols)
+        self._objective = objective
         self._rng = rng
         self._alive_wumpus = self._positions_for(
             generated_map, EntityType.WUMPUS
@@ -68,6 +78,7 @@ class World:
         self._pits = self._positions_for(generated_map, EntityType.PIT)
         self._bats = self._positions_for(generated_map, EntityType.BAT)
         self._gold = self._positions_for(generated_map, EntityType.GOLD)
+        self._required_gold = len(self._gold)
 
         self._agent_position = START_POSITION
         self._agent_direction = START_DIRECTION
@@ -105,6 +116,18 @@ class World:
     @property
     def collected_gold(self) -> int:
         return self._collected_gold
+
+    @property
+    def required_gold(self) -> int:
+        return self._required_gold
+
+    @property
+    def objective(self) -> GameObjective:
+        return self._objective
+
+    @property
+    def exit_position(self) -> Position:
+        return self._exit_position
 
     @property
     def killed_wumpus(self) -> int:
@@ -180,11 +203,12 @@ class World:
         gold_collected = False
         wumpus_killed = False
         teleported = False
+        exit_blocked = False
         self._last_event = None
         self._score += action_cost(action)
 
         if action is Action.MOVE_FORWARD:
-            teleported = self._move_forward()
+            teleported, exit_blocked = self._move_forward()
         elif action in (Action.TURN_RIGHT, Action.TURN_LEFT):
             self._agent_direction = rotated(self._agent_direction, action)
         elif action is Action.GRAB:
@@ -208,24 +232,24 @@ class World:
             teleported=teleported,
             died=self._dead,
             escaped=self._escaped,
+            exit_blocked=exit_blocked,
         )
 
-    def _move_forward(self) -> bool:
+    def _move_forward(self) -> tuple[bool, bool]:
         destination = forward_position(
             self._agent_position, self._agent_direction
         )
         if not destination.is_inside(self._rows, self._cols):
             self._last_bump = True
-            return False
+            return False, False
 
         self._agent_position = destination
         if destination in self._bats:
             return self._teleport_from_bat()
 
-        self._resolve_current_position()
-        return False
+        return False, self._resolve_current_position()
 
-    def _teleport_from_bat(self) -> bool:
+    def _teleport_from_bat(self) -> tuple[bool, bool]:
         for _ in range(MAX_BAT_TELEPORT_CHAIN):
             self._agent_position = choose_teleport_destination(
                 self._rng,
@@ -233,8 +257,7 @@ class World:
                 cols=self._cols,
             )
             if self._agent_position not in self._bats:
-                self._resolve_current_position()
-                return True
+                return True, self._resolve_current_position()
 
         self._last_event = BAT_CHAIN_LIMIT_EVENT
         self._agent_position = choose_teleport_destination(
@@ -243,10 +266,9 @@ class World:
             cols=self._cols,
             excluded=self._bats,
         )
-        self._resolve_current_position()
-        return True
+        return True, self._resolve_current_position()
 
-    def _resolve_current_position(self) -> None:
+    def _resolve_current_position(self) -> bool:
         if (
             self._agent_position in self._pits
             or self._agent_position in self._alive_wumpus
@@ -254,6 +276,23 @@ class World:
             self._score += DEATH_PENALTY
             self._dead = True
             self._game_over = True
+            return False
+
+        if self._agent_position == self._exit_position:
+            if self._exit_requirement_satisfied():
+                self._escaped = True
+                self._game_over = True
+            else:
+                self._last_event = EXIT_BLOCKED_EVENT
+                return True
+        return False
+
+    def _exit_requirement_satisfied(self) -> bool:
+        if self._objective is GameObjective.ESCAPE_FAST:
+            return True
+        if self._objective is GameObjective.COLLECT_ALL_GOLD:
+            return self._collected_gold >= self._required_gold
+        raise AssertionError(f"Unsupported game objective: {self._objective!r}")
 
     def _grab_gold(self) -> bool:
         if self._agent_position not in self._gold:
@@ -282,9 +321,4 @@ class World:
         return False
 
     def _climb(self) -> None:
-        if self._agent_position == START_POSITION:
-            self._escaped = True
-            self._game_over = True
-            return
-
         self._last_event = INVALID_CLIMB_EVENT

@@ -84,7 +84,7 @@ def test_strategy_reasoning_targets_the_pursued_unexplored_cell() -> None:
     assert reason.target == Position(1, 2)
 
 
-def test_strategy_climbs_at_the_start_with_gold_and_no_safe_frontier() -> None:
+def test_strategy_never_climbs_at_the_start_with_gold_and_no_safe_frontier() -> None:
     knowledge = safe_knowledge(3, 3, [START_POSITION])
     strategy = Strategy()
 
@@ -96,10 +96,12 @@ def test_strategy_climbs_at_the_start_with_gold_and_no_safe_frontier() -> None:
         glitter=False,
     )
 
-    assert action is Action.CLIMB
+    assert action is Action.TURN_RIGHT
 
 
-def test_strategy_heads_toward_the_start_with_gold_and_no_safe_frontier() -> None:
+def test_strategy_keeps_acting_with_gold_and_no_safe_frontier() -> None:
+    """The start room is no longer an escape hatch, so it may not end the turn."""
+
     knowledge = safe_knowledge(3, 3, [START_POSITION, Position(2, 1), Position(3, 1)])
     strategy = Strategy()
 
@@ -134,7 +136,7 @@ def test_strategy_explores_the_nearest_unvisited_safe_cell() -> None:
     assert action == Action.TURN_RIGHT
 
 
-def test_strategy_abandons_at_the_exit_when_no_exploration_remains() -> None:
+def test_strategy_waits_when_no_exit_route_or_exploration_remains() -> None:
     knowledge = safe_knowledge(3, 3, [Position(1, 1)])
     strategy = Strategy()
 
@@ -146,7 +148,7 @@ def test_strategy_abandons_at_the_exit_when_no_exploration_remains() -> None:
         glitter=False,
     )
 
-    assert action is Action.CLIMB
+    assert action is Action.TURN_RIGHT
 
 
 def test_strategy_reuses_the_queued_plan_across_calls() -> None:
@@ -312,9 +314,9 @@ def test_strategy_falls_through_to_risk_when_every_unexplored_cell_is_unreachabl
     assert strategy._target == Position(6, 1)
 
 
-def test_strategy_falls_through_to_risk_when_the_way_home_is_blocked_with_gold() -> None:
+def test_strategy_falls_through_to_risk_when_the_way_to_the_exit_is_blocked() -> None:
     # The agent holds gold and has nothing left proven-safe to explore, but
-    # the route back to the start cell is broken by an unclassified gap.
+    # the route on to the far-corner exit is broken by an unclassified gap.
     # Priority 2 must not give up outright: a reachable, in-threshold risk
     # candidate should still be taken to try to clear the way.
     knowledge = KnowledgeBase(10, 1)
@@ -384,7 +386,7 @@ def test_strategy_utility_rejects_bat_risk_after_two_gold() -> None:
     assert strategy._target is None
 
 
-def test_strategy_climbs_with_all_configured_gold_despite_safe_frontier() -> None:
+def test_strategy_never_climbs_with_all_configured_gold_despite_safe_frontier() -> None:
     knowledge = safe_knowledge(3, 3, [START_POSITION])
     knowledge.mark_safe(Position(2, 1))
     strategy = Strategy(total_gold=3)
@@ -397,10 +399,10 @@ def test_strategy_climbs_with_all_configured_gold_despite_safe_frontier() -> Non
         glitter=False,
     )
 
-    assert action is Action.CLIMB
+    assert action is Action.TURN_RIGHT
 
 
-def test_strategy_returns_home_with_all_configured_gold_despite_safe_frontier() -> None:
+def test_strategy_does_not_return_home_with_all_configured_gold() -> None:
     knowledge = safe_knowledge(
         3,
         3,
@@ -418,7 +420,7 @@ def test_strategy_returns_home_with_all_configured_gold_despite_safe_frontier() 
     )
 
     assert action is Action.TURN_RIGHT
-    assert strategy._target == START_POSITION
+    assert strategy._target is None
 
 
 def test_strategy_ignores_an_unsafe_cell_that_is_not_reachable() -> None:
@@ -438,7 +440,7 @@ def test_strategy_ignores_an_unsafe_cell_that_is_not_reachable() -> None:
         glitter=False,
     )
 
-    assert action is Action.CLIMB
+    assert action is Action.TURN_RIGHT
 
 
 def test_strategy_shoots_a_confirmed_wumpus_once_already_aligned() -> None:
@@ -479,7 +481,7 @@ def test_strategy_does_not_shoot_a_merely_possible_wumpus() -> None:
         glitter=False,
     )
 
-    assert action is Action.CLIMB
+    assert action is Action.TURN_RIGHT
     assert action is not Action.SHOOT
 
 
@@ -707,7 +709,7 @@ def test_strategy_hunting_passes_the_canonical_arrow_cost_to_utility(
     assert calls[0]["requires_arrow"] is True
 
 
-def test_strategy_declines_a_risk_above_the_threshold_and_returns_to_start() -> None:
+def test_strategy_declines_a_risk_above_the_threshold_and_waits() -> None:
     # (3, 1) is a candidate for both a pit and a Wumpus (score 3 + 4 = 7),
     # above `risk.RISK_THRESHOLD` (4): priority 6 must not take that risk,
     # and priority 7 routes back toward the start cell instead.
@@ -725,7 +727,7 @@ def test_strategy_declines_a_risk_above_the_threshold_and_returns_to_start() -> 
     )
 
     assert action is not None
-    assert strategy._target == START_POSITION
+    assert strategy._target is None
 
 
 def test_strategy_never_treats_a_confirmed_danger_cell_as_a_risk_candidate() -> None:
@@ -741,4 +743,4 @@ def test_strategy_never_treats_a_confirmed_danger_cell_as_a_risk_candidate() -> 
         glitter=False,
     )
 
-    assert action is Action.CLIMB
+    assert action is Action.TURN_RIGHT

@@ -44,16 +44,19 @@ def world_with(
     )
 
 
-def test_engine_stops_when_the_agent_climbs_at_the_exit() -> None:
+EXIT_SCRIPT = (Action.MOVE_FORWARD,) * 5 + (Action.TURN_RIGHT,) + (Action.MOVE_FORWARD,) * 5
+
+
+def test_engine_stops_when_the_agent_enters_the_automatic_exit() -> None:
     world = world_with()
-    agent = ScriptedAgent([Action.CLIMB], fallback=Action.CLIMB)
+    agent = ScriptedAgent(EXIT_SCRIPT, fallback=Action.TURN_RIGHT)
     engine = GameEngine(world, agent)
 
     outcome = engine.run()
 
     assert outcome.status is GameStatus.ESCAPED
     assert outcome.escaped is True
-    assert outcome.turns == 1
+    assert outcome.turns == len(EXIT_SCRIPT)
     assert engine.is_over is True
 
 
@@ -96,7 +99,7 @@ def test_engine_rejects_a_non_positive_turn_limit() -> None:
 
 def test_step_raises_after_the_game_is_over() -> None:
     world = world_with()
-    engine = GameEngine(world, ScriptedAgent([Action.CLIMB], fallback=Action.CLIMB))
+    engine = GameEngine(world, ScriptedAgent(EXIT_SCRIPT, fallback=Action.TURN_RIGHT))
 
     engine.run()
 
@@ -106,22 +109,16 @@ def test_step_raises_after_the_game_is_over() -> None:
 
 def test_engine_follows_the_perceive_decide_act_learn_cycle() -> None:
     world = world_with({Position(1, 1): EntityType.GOLD})
-    agent = ScriptedAgent([Action.GRAB, Action.CLIMB], fallback=Action.CLIMB)
+    agent = ScriptedAgent([Action.GRAB, *EXIT_SCRIPT], fallback=Action.TURN_RIGHT)
     engine = GameEngine(world, agent)
 
     outcome = engine.run()
 
-    assert [observation.position for observation in agent.observations] == [
-        Position(1, 1),
-        Position(1, 1),
-    ]
+    assert [observation.position for observation in agent.observations[:2]] == [Position(1, 1), Position(1, 1)]
     assert agent.observations[0].collected_gold == 0
     assert agent.observations[0].perception.glitter is True
     assert agent.observations[1].collected_gold == 1
-    assert [result.action for result in agent.results] == [
-        Action.GRAB,
-        Action.CLIMB,
-    ]
+    assert [result.action for result in agent.results[:2]] == [Action.GRAB, Action.MOVE_FORWARD]
     assert outcome.collected_gold == 1
     assert outcome.score == world.score
 
@@ -165,10 +162,10 @@ def test_engine_renders_before_deciding_and_renders_final_after_learning() -> No
             super().process_result(result)
 
     world = RecordingWorld(
-        GeneratedMap(rows=6, cols=6, entities={}),
+        GeneratedMap(rows=2, cols=2, entities={}),
         rng=random.Random(0),
     )
-    agent = RecordingAgent([Action.CLIMB], fallback=Action.CLIMB)
+    agent = RecordingAgent([Action.MOVE_FORWARD, Action.TURN_RIGHT, Action.MOVE_FORWARD], fallback=Action.TURN_RIGHT)
     seen_observations: list[AgentObservation] = []
     seen_outcomes: list[GameOutcome] = []
 
@@ -189,36 +186,29 @@ def test_engine_renders_before_deciding_and_renders_final_after_learning() -> No
 
     outcome = engine.run()
 
-    assert events == [
-        "observe",
-        "render",
-        "decide",
-        "execute",
-        "process_result",
-        "render_final",
-    ]
+    assert events == ["observe", "render", "decide", "execute", "process_result"] * 3 + ["render_final"]
     assert seen_observations == agent.observations
     assert seen_outcomes == [outcome]
 
 
 @pytest.mark.parametrize(
-    ("entities", "action", "max_turns", "expected_status"),
+    ("entities", "actions", "max_turns", "expected_status"),
     [
-        ({}, Action.CLIMB, 2, GameStatus.ESCAPED),
-        ({Position(2, 1): EntityType.PIT}, Action.MOVE_FORWARD, 2, GameStatus.DEAD),
-        ({}, Action.TURN_RIGHT, 1, GameStatus.TURN_LIMIT),
+        ({}, EXIT_SCRIPT, 11, GameStatus.ESCAPED),
+        ({Position(2, 1): EntityType.PIT}, (Action.MOVE_FORWARD,), 2, GameStatus.DEAD),
+        ({}, (Action.TURN_RIGHT,), 1, GameStatus.TURN_LIMIT),
     ],
 )
 def test_engine_renders_final_for_every_terminal_status(
     entities: Mapping[Position, EntityType],
-    action: Action,
+    actions: Sequence[Action],
     max_turns: int,
     expected_status: GameStatus,
 ) -> None:
     rendered: list[GameOutcome] = []
     engine = GameEngine(
         world_with(entities),
-        ScriptedAgent([], fallback=action),
+        ScriptedAgent(actions, fallback=actions[-1]),
         max_turns=max_turns,
         on_render_final=rendered.append,
     )
@@ -264,12 +254,13 @@ def test_agent_only_receives_the_reduced_observation() -> None:
 
 def test_observation_reports_an_inactive_agent_after_the_game_ends() -> None:
     world = world_with()
-    world.execute(Action.CLIMB)
+    for action in EXIT_SCRIPT:
+        world.execute(action)
 
     observation = world.observation()
 
     assert observation.active is False
-    assert observation.position == Position(1, 1)
+    assert observation.position == Position(6, 6)
 
 
 def test_seeded_games_with_the_simple_agent_are_reproducible() -> None:

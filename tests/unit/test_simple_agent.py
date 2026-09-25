@@ -60,7 +60,7 @@ def test_agent_grabs_when_it_perceives_glitter() -> None:
     assert agent.decide(observation(glitter=True)) is Action.GRAB
 
 
-def test_agent_climbs_at_the_start_with_gold_and_no_safe_frontier() -> None:
+def test_agent_never_climbs_at_the_start_with_gold_and_no_safe_frontier() -> None:
     # A clear scan at the start (no perceived danger) always reveals a safe,
     # unvisited neighbor, so climbing there requires evidence that keeps both
     # neighbors unresolved instead: a full house of positive signals.
@@ -70,7 +70,7 @@ def test_agent_climbs_at_the_start_with_gold_and_no_safe_frontier() -> None:
         observation(collected_gold=1, breeze=True, stench=True, bat_noise=True)
     )
 
-    assert decision is Action.CLIMB
+    assert decision is not Action.CLIMB
 
 
 def test_agent_does_not_climb_carrying_gold_away_from_the_exit() -> None:
@@ -81,12 +81,12 @@ def test_agent_does_not_climb_carrying_gold_away_from_the_exit() -> None:
     assert decision is not Action.CLIMB
 
 
-def test_agent_deliberately_climbs_without_gold_when_risk_is_excessive() -> None:
+def test_agent_waits_without_gold_when_risk_is_excessive() -> None:
     agent = SimpleAgent(random.Random(1))
 
     decision = agent.decide(observation(breeze=True, stench=True, bat_noise=True))
 
-    assert decision is Action.CLIMB
+    assert decision is Action.TURN_RIGHT
 
 
 def test_agent_never_randomly_moves_into_confirmed_danger_when_return_is_disconnected() -> None:

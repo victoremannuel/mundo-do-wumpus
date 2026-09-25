@@ -36,7 +36,7 @@ from wumpus.ui.retro_app import (
 )
 
 SEED = 42
-BIG_TURN_BUDGET = 400
+BIG_TURN_BUDGET = 30
 
 
 def build_app(
@@ -48,7 +48,9 @@ def build_app(
     speed_index: int | None = None,
 ) -> tuple[RetroGameApp, GameEngine]:
     world, agent = main.build_game(seed)
-    engine = GameEngine(world, agent)
+    # UI tests exercise the real loop but use a small technical cap so a
+    # fail-closed generated map cannot make an event-loop test slow.
+    engine = GameEngine(world, agent, max_turns=BIG_TURN_BUDGET)
     kwargs: dict[str, Any] = {}
     if speed_index is not None:
         kwargs["speed_index"] = speed_index
@@ -352,7 +354,7 @@ def test_the_interface_does_not_change_the_game_a_bare_engine_would_play() -> No
     through_interface = engine.outcome()
 
     world, agent = main.build_game(SEED)
-    headless = GameEngine(world, agent).run()
+    headless = GameEngine(world, agent, max_turns=BIG_TURN_BUDGET).run()
 
     assert through_interface == headless
 
@@ -379,7 +381,7 @@ def test_pausing_and_changing_speed_never_alters_the_outcome() -> None:
     _app, engine = drive(scenario)
 
     world, agent = main.build_game(SEED)
-    assert engine.outcome() == GameEngine(world, agent).run()
+    assert engine.outcome() == GameEngine(world, agent, max_turns=BIG_TURN_BUDGET).run()
 
 
 def test_the_interface_module_never_touches_a_random_source() -> None:

@@ -11,6 +11,7 @@ from wumpus.agent.reasoning import DecisionReason
 from wumpus.agent.strategy import Strategy
 from wumpus.domain import Action, ActionResult, AgentObservation
 from wumpus.game.config import GameConfig, START_DIRECTION, START_POSITION
+from wumpus.game.objective import GameObjective
 
 
 class SimpleAgent:
@@ -27,6 +28,8 @@ class SimpleAgent:
         self,
         rng: random.Random,
         config: GameConfig | None = None,
+        *,
+        objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,
     ) -> None:
         game_config = config if config is not None else GameConfig()
         self._memory = AgentMemory(
@@ -35,7 +38,14 @@ class SimpleAgent:
             KnowledgeBase(game_config.rows, game_config.cols),
         )
         self._inference = InferenceEngine(self._memory.knowledge)
-        self._strategy = Strategy(total_gold=game_config.gold_count)
+        # The exit is a public structural rule, not a hidden-map fact. Knowing
+        # it is safe reveals neither a route nor any entity location.
+        self._memory.knowledge.mark_safe(game_config.exit_position)
+        self._strategy = Strategy(
+            total_gold=game_config.gold_count,
+            objective=objective,
+            exit_position=game_config.exit_position,
+        )
 
     @property
     def memory(self) -> AgentMemory:

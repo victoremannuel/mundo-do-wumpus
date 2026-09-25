@@ -98,6 +98,37 @@ def least_risk_candidate(
     return candidates[0]
 
 
+def least_risk_candidate_toward(
+    knowledge: KnowledgeBase,
+    position: Position,
+    target: Position,
+) -> RiskCandidate | None:
+    """Choose an equally acceptable risk deterministically toward ``target``.
+
+    Risk remains the primary ordering.  The target is consulted only after
+    confirmed dangers are excluded and candidates have the same risk score.
+    """
+
+    candidates = [
+        RiskCandidate(neighbor, score)
+        for safe_cell in _reachable_safe(knowledge, position)
+        for neighbor in safe_cell.neighbors()
+        if neighbor in knowledge.all_cells and neighbor not in knowledge.safe
+        for score in (cell_risk(knowledge, neighbor),)
+        if 0.0 < score < CONFIRMED_DANGER
+    ]
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda candidate: (
+            candidate.score,
+            candidate.position.manhattan_distance(target),
+            candidate.position,
+        )
+    )
+    return candidates[0]
+
+
 def _reachable_safe(knowledge: KnowledgeBase, position: Position) -> frozenset[Position]:
     """Return every safe cell connected to ``position`` through safe cells."""
 

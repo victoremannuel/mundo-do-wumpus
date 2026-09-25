@@ -290,6 +290,72 @@ Section 60 pseudocode; section 67-68; `src/wumpus/game/engine.py::GameEngine.ste
 `src/wumpus/ui/console.py::render_reasoning`; independent specification
 review on 2026-09-25.
 
+## DEC-008 — The exit moves to the far corner and the match objective is selectable
+
+Date: 2026-09-25
+Status: ACCEPTED
+Affected phase(s): post-plan maintenance `GAME-GOAL-EXIT-CORNER-003`
+(supersedes plan consequences for FASE 15 and DEC-006)
+
+Context:
+After the plan was fully implemented, the user explicitly authorized a
+gameplay rule change. The plan's historical rule made `[1,1]` both the spawn
+and the escape room, reached by `Action.CLIMB`, with a single implicit goal.
+The user requires the match to become a traversal of the cave with an
+explicitly chosen objective. This record exists because `.specs/plan.md` must
+not be rewritten to match later code.
+
+Decision:
+The spawn stays `START_POSITION = Position(1, 1)` facing `NORTH`. The exit
+becomes the opposite corner, derived once by
+`exit_position_for(rows, cols)` -> `Position(rows, cols)` and exposed as
+`GameConfig.exit_position`; the canonical 6x6 map therefore exits at `[6,6]`.
+Map generation protects that room, so the protected set becomes the three safe
+initial cells plus the exit, computed by `protected_cells(rows, cols)`; the
+rooms adjacent to the exit stay randomly generated. Escape is automatic: the
+`World` checks the objective the moment the agent occupies the exit room,
+however it arrived, including a bat teleport. `Action.CLIMB` stays in the enum
+for compatibility but can no longer end a game anywhere, including `[1,1]`.
+A new `GameObjective` enum in the game layer offers `ESCAPE_FAST` (the exit
+alone ends the match) and `COLLECT_ALL_GOLD` (`collected_gold >=
+required_gold`, derived by the `World` from the generated map, must hold
+first). The objective is chosen explicitly in the setup screen alongside the
+mode and is carried by `SessionSettings` into both the `World` and
+`SimpleAgent`.
+
+Reason:
+Making the exit a far corner turns the match into an actual traversal, which
+is the user's stated goal, and deriving it from the map dimensions keeps
+smaller test maps valid instead of hardcoding `[6,6]`. Automatic escape
+removes a turn that carried no decision. Keeping the objective in the game
+layer rather than the UI preserves the single source of truth for terminal
+rules: the manual and autonomous modes share one `World` condition.
+
+Consequences:
+This supersedes, for all later work, the plan consequences that made
+`START_POSITION` the escape room, that made returning to `[1,1]` a rational
+exit target, and that made `CLIMB` a victory. DEC-006's utility heuristic
+survives as a risk policy but no longer decides a physical destination, and
+its "return to `[1,1]` and climb there" clause is void. The canonical 6x6
+entity capacity drops from 33 to 32 rooms. `Strategy` now branches on the
+objective: `ESCAPE_FAST` orders the safe frontier by real planned action cost
+plus the Manhattan lower bound to the exit and deliberately skips glitter,
+while `COLLECT_ALL_GOLD` still grabs gold and may not escape before the last
+one is collected, so `TURN_LIMIT` and `DEAD` remain legitimate outcomes.
+Safety filtering still runs before any distance heuristic. Map solvability is
+deliberately not guaranteed: no rejection sampling was added. The historical
+FASE 1-21 statuses are unchanged; only FASE 21's README content was revalidated.
+
+Evidence:
+User authorization of maintenance `GAME-GOAL-EXIT-CORNER-003` on 2026-09-25;
+`src/wumpus/game/objective.py`; `src/wumpus/game/config.py::exit_position_for`,
+`protected_cells`, `available_entity_cells`;
+`src/wumpus/environment/world.py::World._exit_requirement_satisfied`;
+`src/wumpus/agent/strategy.py`; `tests/unit/test_game_goal_exit.py`;
+`tests/unit/test_strategy.py`; `tests/unit/test_retro_setup.py`;
+`tests/unit/test_retro_tiles.py`; `tests/e2e/test_seeded_games.py`;
+`tests/test_readme.py`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

@@ -12,6 +12,7 @@ from wumpus.environment.generator import (
     MapGenerator,
 )
 from wumpus.environment.world import (
+    EXIT_BLOCKED_EVENT,
     INVALID_CLIMB_EVENT,
     START_DIRECTION,
     START_POSITION,
@@ -24,6 +25,7 @@ __all__ = (
     "SAFE_INITIAL_CELLS",
     "BatTeleportError",
     "GeneratedMap",
+    "EXIT_BLOCKED_EVENT",
     "INVALID_CLIMB_EVENT",
     "MapGenerationError",
     "MapGenerator",

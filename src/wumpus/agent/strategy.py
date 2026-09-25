@@ -1,35 +1,4 @@
-"""Fixed decision hierarchy consuming agent-owned knowledge and the planner.
-
-Implements plan section 44's priorities 1-7:
-
-1. Grab visible gold.
-2. Climb at the start cell once holding gold with no safe frontier left, or
-   route back toward the start cell first when elsewhere.
-3/4. Route toward the nearest reachable, unvisited safe cell.
-5. Shoot a confirmed Wumpus once no safe exploration remains (section 54:
-   only ever a confirmed Wumpus, never mere suspicion): align directly when
-   already sharing a row or column with it (section 55), otherwise route to
-   the nearest reachable safe cell that would share one.
-6. Once no safe exploration and no shootable confirmed Wumpus remain, pass
-   the lowest-risk reachable cell through the exit policy's utility and
-   gold-conditioned tolerance checks (sections 42-48).
-7. When exploration is no longer rational, route back toward the start cell
-   or climb immediately when already there.
-
-Priorities 2-4 only *return* early when they actually produce an action;
-when routing toward an unexplored cell or back to the start cell finds no
-safe path (e.g. an unclassified gap separates a disconnected safe region),
-`decide` falls through to priorities 5-7 instead of giving up immediately --
-including while holding gold, since section 45's "não existem novas células
-alcançáveis com risco aceitável" exit condition and section 48 both
-contemplate exactly that risk/reward tradeoff. FASE 15's exit policy applies
-the stricter post-gold tolerance deferred by `DEC-005`.
-
-When the agent is away from the exit and its safe knowledge contains neither
-an acceptable exploration step nor a route home, `decide` rotates in place
-instead of allowing a knowledge-blind fallback to enter rejected or confirmed
-danger. The global turn limit bounds that defensive wait.
-"""
+"""Objective-aware, knowledge-only decisions for the logical agent."""
 
 from __future__ import annotations
 
@@ -39,19 +8,32 @@ from wumpus.agent.exit_policy import should_explore
 from wumpus.agent.knowledge import KnowledgeBase
 from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
 from wumpus.agent.reasoning import DecisionReason
-from wumpus.agent.risk import least_risk_candidate
+from wumpus.agent.risk import least_risk_candidate, least_risk_candidate_toward
 from wumpus.domain import Action, ActionResult, Direction, Position
-from wumpus.game.config import START_POSITION, GameConfig
+from wumpus.game.config import GameConfig, exit_position_for
+from wumpus.game.objective import GameObjective
 
 
 class Strategy:
     """Choose one action per cycle, planning routes only through safe cells."""
 
-    def __init__(self, total_gold: int | None = None) -> None:
+    def __init__(
+        self,
+        total_gold: int | None = None,
+        *,
+        objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,
+        exit_position: Position | None = None,
+    ) -> None:
         configured_gold = GameConfig().gold_count if total_gold is None else total_gold
         if configured_gold < 0:
             raise ValueError("total_gold cannot be negative")
         self._total_gold = configured_gold
+        self._objective = objective
+        self._exit_position = (
+            exit_position
+            if exit_position is not None
+            else exit_position_for(GameConfig().rows, GameConfig().cols)
+        )
         self._target: Position | None = None
         self._path: list[Position] = []
         self._actions: deque[Action] = deque()
@@ -72,7 +54,25 @@ class Strategy:
         collected_gold: int,
         glitter: bool,
     ) -> Action:
-        """Return the next action from the complete decision hierarchy."""
+        """Return one deterministic action for the configured match objective."""
+
+        if self._objective is GameObjective.ESCAPE_FAST:
+            return self._decide_fast_escape(knowledge, position, direction, collected_gold)
+        if self._objective is GameObjective.COLLECT_ALL_GOLD:
+            return self._decide_collect_all(
+                knowledge, position, direction, collected_gold, glitter
+            )
+        raise AssertionError(f"Unsupported game objective: {self._objective!r}")
+
+    def _decide_collect_all(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+        collected_gold: int,
+        glitter: bool,
+    ) -> Action:
+        """Collect every public-count gold, then make the exit the only target."""
 
         if glitter:
             self._clear()
@@ -82,29 +82,11 @@ class Strategy:
             return Action.GRAB
 
         if collected_gold >= self._total_gold:
-            return self._return_or_wait(knowledge, position, direction)
+            return self._exit_or_wait(knowledge, position, direction)
 
         unexplored = knowledge.safe - knowledge.visited
 
-        if collected_gold > 0 and not unexplored:
-            if position == START_POSITION:
-                self._clear()
-                self._last_reason = DecisionReason(
-                    Action.CLIMB,
-                    "Ouro coletado e nenhuma fronteira segura restante",
-                    START_POSITION,
-                )
-                return Action.CLIMB
-            action = self._pursue(knowledge, position, direction, (START_POSITION,))
-            if action is not None:
-                self._last_reason = DecisionReason(
-                    action,
-                    "Retornando ao ponto de partida com ouro coletado",
-                    START_POSITION,
-                )
-                return action
-
-        elif unexplored:
+        if unexplored:
             candidates = sorted(
                 unexplored,
                 key=lambda cell: (position.manhattan_distance(cell), cell),
@@ -130,6 +112,7 @@ class Strategy:
             position,
             direction,
             collected_gold,
+            fall_back_to_exit=False,
         )
         if action is not None:
             return action
@@ -139,6 +122,70 @@ class Strategy:
             None, "Nenhuma ação segura ou aceitável disponível", None
         )
         return None
+
+    def _decide_fast_escape(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+        collected_gold: int,
+    ) -> Action:
+        """Reach the public exit efficiently without sacrificing known safety."""
+
+        action = self._pursue(
+            knowledge, position, direction, (self._exit_position,)
+        )
+        if action is not None:
+            self._last_reason = DecisionReason(
+                action, "Rota segura mais curta para a saída", self._exit_position
+            )
+            return action
+
+        unexplored = knowledge.safe - knowledge.visited
+        if unexplored:
+            candidates = self._frontier_toward_exit(
+                knowledge, position, direction, unexplored
+            )
+            action = self._pursue(knowledge, position, direction, candidates)
+            if action is not None:
+                self._last_reason = DecisionReason(
+                    action, "Explorando fronteira segura em direção à saída", self._target
+                )
+                return action
+
+        action = self._hunt(knowledge, position, direction, collected_gold)
+        if action is not None:
+            return action
+        action = self._explore_at_risk(
+            knowledge,
+            position,
+            direction,
+            collected_gold,
+            fall_back_to_exit=True,
+            target_aware=True,
+        )
+        if action is not None:
+            return action
+        return self._wait()
+
+    def _frontier_toward_exit(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+        candidates: set[Position],
+    ) -> tuple[Position, ...]:
+        """Order reachable safe frontier by real action cost plus exit distance."""
+
+        ranked: list[tuple[int, int, int, Position]] = []
+        for cell in candidates:
+            path = find_path(knowledge, position, cell)
+            if path is None:
+                continue
+            action_cost = len(plan_actions(path, direction))
+            remaining = cell.manhattan_distance(self._exit_position)
+            ranked.append((action_cost + remaining, remaining, action_cost, cell))
+        return tuple(item[-1] for item in sorted(ranked))
 
     def confirm_kill(self, knowledge: KnowledgeBase, result: ActionResult) -> None:
         """Reconcile knowledge after a `SHOOT` result (plan section 56).
@@ -274,10 +321,17 @@ class Strategy:
         position: Position,
         direction: Direction,
         collected_gold: int,
+        *,
+        fall_back_to_exit: bool,
+        target_aware: bool = False,
     ) -> Action | None:
         """Take an acceptable least-risk step or deliberately abandon."""
 
-        candidate = least_risk_candidate(knowledge, position)
+        candidate = (
+            least_risk_candidate_toward(knowledge, position, self._exit_position)
+            if target_aware
+            else least_risk_candidate(knowledge, position)
+        )
         if candidate is not None:
             action_count = self._approach_action_count(
                 knowledge,
@@ -305,32 +359,29 @@ class Strategy:
                 )
                 return action
 
-        return self._return_or_wait(knowledge, position, direction)
+        if fall_back_to_exit:
+            return self._exit_or_wait(knowledge, position, direction)
+        return self._wait()
 
-    def _return_or_wait(
+    def _exit_or_wait(
         self,
         knowledge: KnowledgeBase,
         position: Position,
         direction: Direction,
     ) -> Action:
-        """Return safely, climb, or rotate in place when safe return is unknown."""
+        """Navigate safely to the automatic exit, or wait without guessing."""
 
-        if position == START_POSITION:
-            self._clear()
-            self._last_reason = DecisionReason(
-                Action.CLIMB,
-                "Retorno racional: ponto de partida alcançado",
-                START_POSITION,
-            )
-            return Action.CLIMB
-        action = self._pursue(knowledge, position, direction, (START_POSITION,))
+        action = self._pursue(knowledge, position, direction, (self._exit_position,))
         if action is not None:
             self._last_reason = DecisionReason(
                 action,
-                "Retorno racional: navegando de volta ao ponto de partida",
-                START_POSITION,
+                "Objetivo cumprido: navegando para a saída",
+                self._exit_position,
             )
             return action
+        return self._wait()
+
+    def _wait(self) -> Action:
         self._clear()
         self._last_reason = DecisionReason(
             Action.TURN_RIGHT,

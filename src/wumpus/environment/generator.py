@@ -13,6 +13,7 @@ from wumpus.game.config import (
     SAFE_INITIAL_CELLS,
     GameConfig,
     available_entity_cells,
+    protected_cells,
 )
 
 
@@ -89,7 +90,9 @@ class MapGenerator:
             Position(row, col)
             for row in range(1, self._config.rows + 1)
             for col in range(1, self._config.cols + 1)
-            if Position(row, col) not in SAFE_INITIAL_CELLS
+            if Position(row, col) not in protected_cells(
+                self._config.rows, self._config.cols
+            )
         ]
 
     def _entity_counts(self) -> tuple[tuple[EntityType, int], ...]:
@@ -138,6 +141,9 @@ class MapGenerator:
 
         if SAFE_INITIAL_CELLS.intersection(generated_map.entities):
             raise AssertionError("Generated entity lies in the initial safe zone")
+
+        if self._config.exit_position in generated_map.entities:
+            raise AssertionError("Generated entity lies in the protected exit")
 
         actual_counts = Counter(generated_map.entities.values())
         expected_counts = {

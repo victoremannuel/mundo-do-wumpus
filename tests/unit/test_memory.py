@@ -214,21 +214,15 @@ def test_simple_agent_memory_is_updated_by_the_real_game_loop() -> None:
 
     outcome = GameEngine(world, agent).run()
 
-    all_cells = frozenset(
-        Position(row, col) for row in range(1, 7) for col in range(1, 7)
-    )
-
-    # With no hazard anywhere, every cell becomes known safe; FASE 12's
-    # strategy (priority 3/4) explores the whole board before the exit
-    # condition (priority 2: gold with no safe frontier left) fires CLIMB.
+    # Once every required gold is collected, the public far-corner exit becomes
+    # the priority; exhaustive exploration and CLIMB are no longer a win path.
     assert outcome.status is GameStatus.ESCAPED
-    assert agent.memory.visited == all_cells
     assert agent.memory.path[0] == Position(1, 1)
-    assert agent.memory.path[-1] == Position(1, 1)
+    assert agent.memory.path[-1] == Position(6, 6)
     assert agent.memory.actions[0] is Action.GRAB
-    assert agent.memory.actions[-1] is Action.CLIMB
+    assert agent.memory.actions[-1] is Action.MOVE_FORWARD
     assert agent.memory.collected_gold == 1
-    assert agent.memory.score == 946
+    assert agent.memory.score == 959
     assert agent.memory.gold_seen == frozenset({Position(1, 1)})
 
 
@@ -242,7 +236,7 @@ def test_simple_agent_shoots_a_wumpus_blocking_the_only_route_to_gold() -> None:
         GeneratedMap(
             rows=1,
             cols=4,
-            entities={Position(1, 2): EntityType.WUMPUS, Position(1, 4): EntityType.GOLD},
+            entities={Position(1, 2): EntityType.WUMPUS, Position(1, 3): EntityType.GOLD},
         ),
         rng=random.Random(0),
     )

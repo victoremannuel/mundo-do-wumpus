@@ -12,7 +12,8 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 21 — README final (`VERIFIED`)
+FASE 21 — README final (`VERIFIED`); post-plan maintenance
+`GAME-GOAL-EXIT-CORNER-003` (`VERIFIED`, see `DEC-008`)
 
 ## Phase ledger
 
@@ -317,6 +318,127 @@ Next action: resolve the existing final-project audit blockers with explicit
 scope authorization. FASE 21 was already verified before this maintenance and
 remains verified.
 
+### GAME-GOAL-EXIT-CORNER-003 — Far-corner exit and selectable objectives
+
+Status: `VERIFIED`. This is an explicitly user-authorized post-plan gameplay
+rule change recorded as `DEC-008`. `.specs/plan.md` was not modified. No
+canonical phase status changed: FASE 1–21 stay `VERIFIED`, and FASE 21 stays
+`VERIFIED` after its README content was revalidated against the new rules.
+Reference head `75067f2cbf2fc3b59c58f6794615529dceca209b` matched the local
+HEAD exactly.
+
+Summary:
+
+- Added `src/wumpus/game/objective.py` with `GameObjective.ESCAPE_FAST` and
+  `COLLECT_ALL_GOLD` plus Portuguese labels, exported from `wumpus.game`. The
+  enum lives in the game layer, never in `wumpus.ui`.
+- Centralized the exit in `wumpus.game.config`: `exit_position_for(rows, cols)`,
+  `GameConfig.exit_position`, and `protected_cells(rows, cols)`. No module
+  hardcodes `Position(6, 6)`, and `available_entity_cells` now derives 32 for
+  the canonical 6x6 map instead of the previous 33.
+- `World` takes an `objective`, derives `required_gold` from the generated map
+  before any gold is removed, and escapes automatically through
+  `_exit_requirement_satisfied()` whenever the agent occupies the exit room —
+  including after a bat teleport chain. `_climb()` now only records
+  `INVALID_CLIMB_EVENT`; `Action.CLIMB` stays in the enum, still costs its
+  canonical action price, and can no longer end a game anywhere.
+- `Strategy` branches on the objective. `_decide_fast_escape` pursues the
+  shortest known-safe route to the exit, otherwise ranks the reachable safe
+  frontier by real `plan_actions` cost plus the Manhattan lower bound to the
+  exit, then falls back to the unchanged hunting policy and a target-aware
+  `least_risk_candidate_toward`. `_decide_collect_all` keeps grabbing glitter
+  and cannot target the exit until `collected_gold >= total_gold`.
+  `ESCAPE_FAST` deliberately never grabs gold.
+- Setup now requires an explicit mode *and* objective (keys `1`/`2` and
+  `3`/`4`); `INICIAR` stays disabled until both exist. `SessionSettings`
+  carries `objective` with a programmatic `COLLECT_ALL_GOLD` default and a
+  `with_objective` helper, and `R` returns to setup preserving mode, objective,
+  seed, and counts.
+- Added persistent `START`/`EXIT` pixel markers composited *under* the agent
+  sprite by `retro_map._composite_sprite`, so neither room loses its identity
+  when occupied. Both markers appear on the known and debug boards, in the
+  legend, and the HUD/summary now name the objective and both rooms.
+- Added the `EXIT_BLOCKED` animation (4 frames, green→yellow→red→green,
+  banner `SAÍDA BLOQUEADA — OURO PENDENTE`) driven by the new
+  `ActionResult.exit_blocked` flag, and removed the manual `E`/`SUBIR` binding
+  and footer entry.
+
+Architecture and safety review:
+
+- Knowing `exit_position` is a public board rule, not hidden state. No cell
+  between start and exit is pre-marked safe; only the exit room itself is
+  guaranteed empty, and its neighbours stay randomly generated.
+- Safety filtering still precedes every distance heuristic: the fast frontier
+  ranking only ever orders cells that are already safe and reachable, and
+  `least_risk_candidate_toward` consults the target only to break ties among
+  equally acceptable, non-confirmed-danger candidates. No canonical risk
+  weight or score value changed.
+- `GameEngine` was not modified; the terminal condition remains in `World`, so
+  manual and autonomous modes share one rule. `wumpus.ui` still imports
+  neither `wumpus.environment` nor `wumpus.debug` and consumes no RNG.
+- Generation adds no solvability guarantee or rejection sampling.
+
+Files created:
+
+- `src/wumpus/game/objective.py`
+- `tests/unit/test_game_goal_exit.py`
+
+Files changed:
+
+- `main.py`; `README.md`; `src/wumpus/domain/models.py`;
+  `src/wumpus/environment/__init__.py`; `generator.py`; `world.py`;
+  `src/wumpus/game/__init__.py`; `config.py`; `src/wumpus/agent/risk.py`;
+  `simple_agent.py`; `strategy.py`; `src/wumpus/debug/retro_renderer.py`;
+  `src/wumpus/ui/retro_animation.py`; `retro_app.py`; `retro_map.py`;
+  `retro_panels.py`; `retro_session.py`; `retro_setup.py`; `retro_state.py`;
+  `retro_tiles.py`; `tests/e2e/test_seeded_games.py`;
+  `tests/integration/test_known_maps.py`; `tests/test_readme.py`;
+  `tests/unit/test_engine.py`; `test_game_configuration.py`; `test_memory.py`;
+  `test_retro_animation.py`; `test_retro_app.py`; `test_retro_setup.py`;
+  `test_retro_tiles.py`; `test_simple_agent.py`; `test_strategy.py`;
+  `test_world.py`; `.specs/decisions.md`; `.specs/implementation-status.md`;
+  `.specs/traceability.md`.
+
+Commands and results:
+
+- `.venv/bin/python -m pytest -q` — `362 passed` (baseline was `337`).
+- `.venv/bin/python -m compileall -q src main.py` — exit 0.
+- `git diff --check` — clean.
+- 100-seed stress per objective with three replayed seeds each, 0 exceptions,
+  0 invalid states, every escape verified to happen in the exit room with the
+  objective satisfied: `ESCAPE_FAST` 45 `ESCAPED` / 39 `DEAD` / 16
+  `TURN_LIMIT`; `COLLECT_ALL_GOLD` 4 `ESCAPED` / 15 `DEAD` / 81 `TURN_LIMIT`.
+- Headless objective smoke over the real stack (seeds 42/3/7, both
+  objectives): no `Action.CLIMB` was ever chosen, `ESCAPE_FAST` never grabbed
+  gold, `COLLECT_ALL_GOLD` always grabbed on glitter, and every `ESCAPED`
+  finished at `[6,6]` with the objective satisfied.
+- Textual smoke for all four mode/objective combinations: setup blocks until
+  both choices exist; `INI`/`SAI` markers are present on the first frame, mid
+  game, and on the debug board; the HUD names the objective and `SAÍDA [6,6]`;
+  the legend lists `INÍCIO`/`SAÍDA`; the manual footer no longer offers
+  `SUBIR`; manual mode advanced 0 turns without player input; `R` restored the
+  previous mode and objective.
+
+Known limitations:
+
+- `COLLECT_ALL_GOLD` wins only about 4% of default seeds because the objective
+  now forbids the old premature escape while the pre-existing exploration
+  cycle-detection debt (final-audit blockers for plan sections 106–109) still
+  lets the agent stall until `MAX_TURNS`. `DEAD` and `TURN_LIMIT` are
+  legitimate outcomes, so this is a strategy-quality debt, not a rule defect.
+- With every gold collected and no known-safe route to the exit,
+  `_exit_or_wait` waits deterministically instead of taking acceptable risk.
+  This preserves the prior fail-closed behaviour authorized by the maintenance
+  brief; a risk-bridging variant was not added.
+- The blocked-exit player flow is covered by the `World` and animation tests
+  rather than a manual smoke, because the procedural generator cannot be
+  steered to a reproducible early arrival.
+- Ruff remains unconfigured/not installed.
+
+Next action: resolve the already-recorded final-audit blockers for plan
+sections 78 and 106–109, which remain outside this maintenance and now
+dominate the `COLLECT_ALL_GOLD` outcome distribution.
+
 ## Checkpoint update contract
 
 After each phase attempt, update:
@@ -336,6 +458,16 @@ suite, and specification compliance all pass. Commit the state file in the same
 checkpoint as the implementation it describes.
 
 ## Last update
+
+2026-09-25 — GAME-GOAL-EXIT-CORNER-003 verified: moved the canonical exit from
+the spawn room to the opposite corner, made escape automatic, removed `CLIMB`
+as a victory condition, and added the selectable `ESCAPE_FAST` /
+`COLLECT_ALL_GOLD` objectives shared by the environment, strategy, manual mode,
+setup, HUD, markers, and README. Recorded as `DEC-008`; `.specs/plan.md`
+untouched and FASE 1–21 statuses unchanged. Full suite `362 passed`;
+compileall exit 0; `git diff --check` clean; 100-seed stress per objective with
+0 exceptions and deterministic replays; headless and Textual smokes passed for
+all four mode/objective combinations.
 
 2026-09-25 — GAMEPLAY-TUI-ANIMATION-MANUAL-002 verified: added explicit
 pre-game setup, configurable entity counts, autonomous/manual sessions,

@@ -125,8 +125,13 @@ def _room_art(
         kind = view.tiles.get(position, TileKind.UNKNOWN)
         is_agent = False
 
-    sprite = tile_lines(kind, view.agent_direction)
-    style = tile_style(kind)
+    marker = view.marker_at(position)
+    base_kind = marker or (view.tiles.get(position, TileKind.UNKNOWN))
+    sprite = tile_lines(base_kind)
+    style = tile_style(base_kind)
+    if is_agent:
+        sprite = _composite_sprite(sprite, tile_lines(TileKind.AGENT, view.agent_direction))
+        style = tile_style(TileKind.AGENT)
 
     if overlay is None:
         return sprite, style
@@ -154,3 +159,14 @@ def _room_art(
         style = overlay.agent_style
 
     return sprite, style
+
+
+def _composite_sprite(
+    base: tuple[str, ...], overlay: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Paint non-space agent pixels while retaining START/EXIT marker pixels."""
+
+    return tuple(
+        "".join(top if top != " " else bottom for bottom, top in zip(base_line, overlay_line))
+        for base_line, overlay_line in zip(base, overlay)
+    )

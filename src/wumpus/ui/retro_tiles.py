@@ -48,6 +48,8 @@ class TileKind(Enum):
     BAT = auto()
     GOLD = auto()
     EMPTY = auto()
+    START = auto()
+    EXIT = auto()
     AGENT = auto()
 
 
@@ -123,6 +125,22 @@ _EMPTY_SPRITE = (
     "          ",
 )
 
+_START_SPRITE = (
+    "INI      █",
+    "  █    █  ",
+    "    ██    ",
+    "  █    █  ",
+    "█        █",
+)
+
+_EXIT_SPRITE = (
+    "SAI██████ ",
+    " ██    ██ ",
+    " ██    ██ ",
+    " ██    ██ ",
+    "  ██████  ",
+)
+
 _AGENT_SPRITES = MappingProxyType(
     {
         Direction.NORTH: (
@@ -168,6 +186,8 @@ _SPRITES = MappingProxyType(
         TileKind.BAT: _BAT_SPRITE,
         TileKind.GOLD: _GOLD_SPRITE,
         TileKind.EMPTY: _EMPTY_SPRITE,
+        TileKind.START: _START_SPRITE,
+        TileKind.EXIT: _EXIT_SPRITE,
     }
 )
 
@@ -183,6 +203,8 @@ TILE_STYLES = MappingProxyType(
         TileKind.BAT: RETRO_BAT_STYLE,
         TileKind.GOLD: RETRO_GOLD_STYLE,
         TileKind.EMPTY: RETRO_EMPTY_STYLE,
+        TileKind.START: "bright_cyan",
+        TileKind.EXIT: "bright_green",
         TileKind.AGENT: RETRO_AGENT_STYLE,
     }
 )
@@ -213,6 +235,8 @@ _LEGEND_SPRITES = MappingProxyType(
         TileKind.BAT: ("█   █", "·███·"),
         TileKind.GOLD: (" ███ ", "  █  "),
         TileKind.EMPTY: ("     ", "  ·· "),
+        TileKind.START: ("█   █", " INI "),
+        TileKind.EXIT: (" ███ ", " SAI "),
     }
 )
 

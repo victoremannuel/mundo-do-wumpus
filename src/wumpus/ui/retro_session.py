@@ -21,6 +21,7 @@ from enum import Enum, auto
 from wumpus.domain import Action, AgentObservation
 from wumpus.game.config import GameConfig, available_entity_cells
 from wumpus.game.engine import GameEngine
+from wumpus.game.objective import GameObjective
 from wumpus.ui.retro_state import AgentPresentationSource, MapView
 
 
@@ -49,6 +50,7 @@ class SessionSettings:
     mode: GameMode
     seed: int | None = None
     game_config: GameConfig | None = None
+    objective: GameObjective = GameObjective.COLLECT_ALL_GOLD
 
     @property
     def config(self) -> GameConfig:
@@ -58,6 +60,9 @@ class SessionSettings:
 
     def with_mode(self, mode: GameMode) -> "SessionSettings":
         return replace(self, mode=mode)
+
+    def with_objective(self, objective: GameObjective) -> "SessionSettings":
+        return replace(self, objective=objective)
 
 
 @dataclass(frozen=True)

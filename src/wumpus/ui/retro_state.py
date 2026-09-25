@@ -20,6 +20,7 @@ from typing import Protocol
 from wumpus.agent.knowledge import KnowledgeBase, KnownCell
 from wumpus.agent.reasoning import DecisionReason
 from wumpus.domain import ActionResult, AgentObservation, Direction, Perception, Position
+from wumpus.game.config import START_POSITION, exit_position_for
 from wumpus.ui.retro_tiles import TileKind
 
 
@@ -63,6 +64,8 @@ class MapView:
     tiles: Mapping[Position, TileKind]
     agent_position: Position
     agent_direction: Direction
+    start_position: Position | None = None
+    exit_position: Position | None = None
 
     def kind_at(self, position: Position) -> TileKind:
         """Return the tile for a position, with the agent always on top."""
@@ -70,6 +73,13 @@ class MapView:
         if position == self.agent_position:
             return TileKind.AGENT
         return self.tiles.get(position, TileKind.UNKNOWN)
+
+    def marker_at(self, position: Position) -> TileKind | None:
+        if position == self.start_position:
+            return TileKind.START
+        if position == self.exit_position:
+            return TileKind.EXIT
+        return None
 
 
 @dataclass(frozen=True)
@@ -158,6 +168,8 @@ def build_known_map_view(
         tiles=tiles,
         agent_position=agent_position,
         agent_direction=agent_direction,
+        start_position=START_POSITION,
+        exit_position=exit_position_for(knowledge.rows, knowledge.cols),
     )
 
 

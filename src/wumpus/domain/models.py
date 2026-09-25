@@ -20,3 +20,4 @@ class ActionResult:
     teleported: bool = False
     died: bool = False
     escaped: bool = False
+    exit_blocked: bool = False

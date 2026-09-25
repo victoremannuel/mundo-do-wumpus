@@ -16,6 +16,7 @@ from wumpus.domain import EntityType, Position
 from wumpus.environment.world import DebugWorldSnapshot
 from wumpus.ui.retro_state import MapView
 from wumpus.ui.retro_tiles import TileKind
+from wumpus.game.config import START_POSITION, exit_position_for
 
 
 _ENTITY_TILES = MappingProxyType(
@@ -43,4 +44,6 @@ def build_real_map_view(snapshot: DebugWorldSnapshot) -> MapView:
         tiles=tiles,
         agent_position=snapshot.agent_position,
         agent_direction=snapshot.agent_direction,
+        start_position=START_POSITION,
+        exit_position=exit_position_for(snapshot.rows, snapshot.cols),
     )

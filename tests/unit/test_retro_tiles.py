@@ -58,14 +58,25 @@ def test_every_tile_kind_has_a_style() -> None:
 
 
 def test_legend_uses_distinct_recognizable_mini_sprites() -> None:
-    kinds = (TileKind.AGENT, TileKind.WUMPUS, TileKind.PIT, TileKind.BAT, TileKind.GOLD)
+    kinds = (
+        TileKind.AGENT,
+        TileKind.WUMPUS,
+        TileKind.PIT,
+        TileKind.BAT,
+        TileKind.GOLD,
+        TileKind.START,
+        TileKind.EXIT,
+    )
     icons = {kind: legend_icon(kind) for kind in kinds}
     assert len(set(icons.values())) == len(kinds)
     for icon in icons.values():
         assert len(icon) == LEGEND_ICON_HEIGHT
         assert {cell_len(line) for line in icon} == {LEGEND_ICON_WIDTH}
     output = render_legend().plain
-    assert all(label in output for label in ("AGENTE", "WUMPUS", "POÇO", "MORCEGO", "OURO"))
+    assert all(
+        label in output
+        for label in ("AGENTE", "WUMPUS", "POÇO", "MORCEGO", "OURO", "INÍCIO", "SAÍDA")
+    )
     assert len({legend_icon(kind) for kind in TileKind}) == len(TileKind)
 
 
@@ -140,6 +151,48 @@ def test_an_empty_knowledge_base_reveals_nothing_but_fog_and_the_agent() -> None
     assert kinds == {TileKind.UNKNOWN, TileKind.AGENT}
 
 
+def test_the_board_marks_start_and_exit_from_the_very_first_frame() -> None:
+    """Both structural rooms are public rules, so fog never hides either one."""
+
+    knowledge = KnowledgeBase(6, 6)
+    view = build_known_map_view(knowledge, Position(3, 3), Direction.NORTH)
+
+    assert view.start_position == Position(1, 1)
+    assert view.exit_position == Position(6, 6)
+    assert view.marker_at(Position(1, 1)) is TileKind.START
+    assert view.marker_at(Position(6, 6)) is TileKind.EXIT
+    assert view.marker_at(Position(3, 3)) is None
+
+    board = render_map(view).plain
+    assert board.count("INI") == 1
+    assert board.count("SAI") == 1
+
+
+@pytest.mark.parametrize(
+    ("position", "label", "marker"),
+    (
+        (Position(1, 1), "INI", TileKind.START),
+        (Position(6, 6), "SAI", TileKind.EXIT),
+    ),
+)
+def test_the_agent_never_fully_hides_the_room_it_stands_on(
+    position: Position, label: str, marker: TileKind
+) -> None:
+    knowledge = KnowledgeBase(6, 6)
+    occupied = render_map(
+        build_known_map_view(knowledge, position, Direction.NORTH)
+    ).plain
+    elsewhere = render_map(
+        build_known_map_view(knowledge, Position(3, 3), Direction.NORTH)
+    ).plain
+
+    # The marker survives the agent standing on it...
+    assert occupied.count(label) == 1
+    # ...and the agent is still painted, so the two boards cannot be identical.
+    assert occupied != elsewhere
+    assert tile_lines(marker) != tile_lines(TileKind.UNKNOWN)
+
+
 def test_a_six_by_six_board_has_the_exact_projected_geometry() -> None:
     knowledge = KnowledgeBase(6, 6)
     view = build_known_map_view(knowledge, Position(1, 1), Direction.NORTH)
@@ -204,3 +257,17 @@ def test_the_real_board_uses_the_same_geometry_as_the_known_board() -> None:
 
     assert len(lines) == map_board_height(6)
     assert {cell_len(line) for line in lines} == {map_board_width(6)}
+
+
+def test_the_real_board_marks_the_same_start_and_exit_rooms() -> None:
+    """Debug shows the structural rooms too; neither is secret information."""
+
+    world = World(GeneratedMap(rows=6, cols=6, entities={}), rng=random.Random(7))
+
+    view = build_real_map_view(world.debug_snapshot())
+
+    assert view.marker_at(Position(1, 1)) is TileKind.START
+    assert view.marker_at(Position(6, 6)) is TileKind.EXIT
+    board = render_map(view).plain
+    assert board.count("INI") == 1
+    assert board.count("SAI") == 1

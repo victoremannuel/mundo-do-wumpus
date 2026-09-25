@@ -8,10 +8,11 @@ O projeto combina um **agente baseado em conhecimento**, um **agente orientado a
 
 ## Regras do jogo
 
-- A caverna tem 6 × 6 salas, de `[1,1]` a `[6,6]`. O agente começa em `[1,1]`, virado para norte; essa é a saída.
-- A zona inicial (`[1,1]`, `[1,2]`, `[2,1]`) é livre de perigos. Cada mapa tem 2 Wumpus, 4 poços, 3 ouros e 2 morcegos, sem sobreposição.
+- A caverna tem 6 × 6 salas, de `[1,1]` a `[6,6]`. O agente começa em `[1,1]`, virado para norte; a saída estrutural, sempre vazia, é `[6,6]`.
+- A zona inicial (`[1,1]`, `[1,2]`, `[2,1]`) e a saída são livres de entidades. Cada mapa tem 2 Wumpus, 4 poços, 3 ouros e 2 morcegos, sem sobreposição; os vizinhos da saída continuam aleatórios.
 - Ouro vale `+1000`; ações comuns custam `-1`; disparar custa `-10`; morrer aplica `-1000` além do custo de entrar na sala.
-- O agente vence ao subir (`CLIMB`) em `[1,1]` depois de coletar ouro. Poço ou Wumpus vivo encerram a partida por morte.
+- A saída é automática: ao entrar em `[6,6]`, a partida termina quando o objetivo estiver satisfeito. `CLIMB` pode existir por compatibilidade e ainda custa uma ação, mas não é condição de vitória.
+- **ESCAPAR O MAIS RÁPIDO POSSÍVEL** chega à saída com prioridade, usando apenas rotas seguras conhecidas, inferência e risco aceitável; ouro pode ser ignorado pelo agente autônomo. **COLETAR TODOS OS OUROS ANTES DE ESCAPAR** exige todos os ouros configurados e bloqueia a saída enquanto houver ouro pendente.
 - Morcegos teleportam o agente para sala aleatória e podem formar cadeia; a orientação é preservada. A flecha segue em linha reta até parede ou primeiro Wumpus vivo.
 
 Sensores: **fedor** (Wumpus adjacente), **brisa** (poço adjacente), **som de morcego**, **brilho**, **impacto** e **grito**.
@@ -33,7 +34,7 @@ O mapa real só aparece no caminho explícito `World -> DebugRenderer -> interfa
 1. A memória registra observação e resultado da ação.
 2. A base de conhecimento marca salas visitadas, seguras, desconhecidas, possíveis perigos, perigos confirmados e conhecimento negativo.
 3. Ausência de sinal elimina o perigo correspondente nas adjacências; sinais positivos adicionam candidatos. Um perigo só é confirmado quando uma observação tem um único candidato possível.
-4. A estratégia prioriza: pegar ouro; retornar/escapar com ouro; explorar fronteira segura; caçar Wumpus confirmado; escolher o menor risco aceitável; retornar ou aguardar.
+4. A estratégia escolhe uma meta pública: em escape rápido, prioriza rota segura e fronteira com melhor custo conhecido mais distância até `[6,6]`; em coletar todos, pega brilho, explora até obter todos os ouros e então navega para `[6,6]`. Ambas preservam caça racional, risco aceitável e espera fail-closed.
 5. O planejador BFS cria rota apenas por salas conhecidas como seguras.
 
 Como há múltiplos perigos de cada tipo, a interseção de dois sinais positivos não confirma um perigo por si só: perigos distintos podem explicar cada sinal. A implementação privilegia inferências sólidas, ainda que incompletas.
@@ -44,7 +45,7 @@ Como há múltiplos perigos de cada tipo, a interseção de dois sinais positivo
 | --- | --- |
 | Performance | `+1000` ouro, `-1000` morte, `-1` ações normais, `-10` flecha |
 | Environment | Labirinto 6 × 6, Wumpus, poços, morcegos, ouro e paredes |
-| Actuators | Avançar, virar direita/esquerda, pegar, atirar e subir |
+| Actuators | Avançar, virar à direita/esquerda, pegar e atirar (a saída é automática) |
 | Sensors | Fedor, brisa, som de morcego, brilho, impacto e grito |
 
 ## Instalação e testes
@@ -78,7 +79,7 @@ python main.py --no-delay
 python main.py --seed 42 --no-delay --legacy-console
 ```
 
-A interface padrão é uma tela fixa: mostra mapa conhecido pelo agente, posição/direção, sensores, pontuação, ouro, turno, decisão e legenda. Pausa, passo único, velocidade, depuração e saída controlam apenas apresentação e cadência; não escolhem ações. Abaixo de 118 × 44, ela mostra um aviso e se recompõe ao redimensionar. No `--debug`, os mapas conhecido e real são separados; só o primeiro é usado nas decisões.
+A interface padrão começa por uma configuração explícita de **modo** (agente autônomo ou jogador) e **objetivo**; o botão iniciar permanece desabilitado até que ambos sejam escolhidos, e `R` volta à configuração preservando modo, objetivo, seed e contagens. A mesma tela ajusta as contagens de Wumpus, poços, ouros e morcegos; em `6 × 6` restam 32 salas disponíveis para entidades, porque a zona inicial e a saída são protegidas. Em jogo, a tela fixa mostra objetivo, saída, mapa conhecido, posição/direção, sensores, pontuação, ouro, turno, decisão e legenda. `[1,1]` (INÍCIO) e `[6,6]` (SAÍDA) são marcadores pixel-art públicos desde o primeiro quadro, inclusive sob o agente. No modo jogador, os controles são mover, virar, pegar e atirar; não há comando de subir. Ao alcançar a saída sem todos os ouros, o modo de coleta mostra feedback de saída bloqueada e a partida continua. Pausa, passo único, velocidade, depuração e saída controlam apenas apresentação e cadência; não escolhem ações. Abaixo de 118 × 44, ela mostra um aviso e se recompõe ao redimensionar. No `--debug`, os mapas conhecido e real são separados; só o primeiro é usado nas decisões.
 
 ## Exemplos de resultado
 
@@ -99,7 +100,9 @@ python -m pytest tests/e2e/test_seeded_games.py -q
 - Alguns mapas podem ser difíceis ou insolúveis sem risco; o gerador não é refeito para favorecer vitória.
 - Sem passo seguro ou risco aceitável, o agente pode girar deterministicamente até o limite. Detecção explícita de ciclos e lista temporária de objetivos ainda são trabalho futuro.
 - A morte de Wumpus é atribuída conservadoramente: apenas quando o agente consegue prová-la com seu próprio conhecimento.
-- A tela final ainda não exibe motivo detalhado, tiros, taxa de exploração e seed.
+- A tela final exibe modo, objetivo, status, pontuação, ouro, Wumpus, turnos, salas visitadas, seed, início e saída, mas ainda não detalha motivo, tiros e taxa de exploração.
+- O gerador não garante caminho livre entre `[1,1]` e `[6,6]`: protege apenas as duas extremidades, então `DEAD` e `TURN_LIMIT` continuam resultados legítimos em ambos os objetivos.
+- Em **coletar todos os ouros**, sem rota segura conhecida até a saída o agente aguarda de forma determinística em vez de arriscar; a exploração por risco só atua enquanto ainda falta ouro.
 - O painel de raciocínio mostra a decisão do turno anterior junto da nova observação, por causa da ordem de renderização do motor.
 
 ## Estrutura principal

@@ -128,10 +128,10 @@ class GameScreen(Screen[None]):
     #map-real {{ border: round {RETRO_DEBUG}; display: none; }}
     #sidebar {{ width: {SIDEBAR_WIDTH}; height: {MAP_PANEL_HEIGHT}; layout: vertical; overflow: hidden; }}
     #sidebar Static {{ border: round {RETRO_BORDER}; background: {RETRO_PANEL_BACKGROUND}; padding: 0 1; overflow: hidden; }}
-    #status {{ height: 15; }}
+    #status {{ height: 18; }}
     #sensors {{ height: 8; }}
     #decision {{ height: 1fr; }}
-    #legend {{ height: 12; }}
+    #legend {{ height: 14; }}
     #endgame {{ height: 1fr; border: double {RETRO_BORDER}; display: none; }}
     #footer {{ height: {FOOTER_HEIGHT}; background: {RETRO_PANEL_BACKGROUND}; color: {RETRO_TEXT_DIM}; }}
     #overlay-too-small {{ layer: overlay; width: 100%; height: 100%; align: center middle; background: {RETRO_BACKGROUND}; display: none; }}
@@ -145,7 +145,7 @@ class GameScreen(Screen[None]):
         ("minus", "slower", "SLOWER"), ("underscore", "slower", "SLOWER"),
         ("up", "move_forward", "MOVER"), ("left", "turn_left", "VIRAR"),
         ("right", "turn_right", "VIRAR"), ("g", "grab", "PEGAR"),
-        ("f", "shoot", "ATIRAR"), ("e", "climb", "SUBIR"),
+        ("f", "shoot", "ATIRAR"),
         ("r", "restart", "RESTART"), ("q", "quit_game", "QUIT"),
     ]
 
@@ -276,7 +276,8 @@ class GameScreen(Screen[None]):
                                 seed=self.session.settings.seed,
                                 debug_enabled=self._debug_enabled,
                                 mode=self.session.mode,
-                                config=self.session.settings.config)
+                                config=self.session.settings.config,
+                                objective=self.session.settings.objective)
         )
         self.query_one("#sensors", PerceptionWidget).update(
             render_sensors(self._snapshot.perception, frame.phases if frame else None)
@@ -295,7 +296,13 @@ class GameScreen(Screen[None]):
             )
         elif self._outcome is not None:
             self.query_one("#endgame", EndGameOverlay).update(
-                render_endgame(self._outcome, self.session.settings.seed)
+                render_endgame(
+                    self._outcome,
+                    self.session.settings.seed,
+                    mode=self.session.mode,
+                    objective=self.session.settings.objective,
+                    config=self.session.settings.config,
+                )
             )
 
     def _on_game_tick(self) -> None:
@@ -460,9 +467,6 @@ class GameScreen(Screen[None]):
     def action_shoot(self) -> None:
         self._manual_action(Action.SHOOT)
 
-    def action_climb(self) -> None:
-        self._manual_action(Action.CLIMB)
-
     def _manual_action(self, action: Action) -> None:
         if (not self.session.is_manual or self.session.manual_action_submitter is None
                 or self._finished or self._failure is not None
@@ -555,7 +559,8 @@ class RetroGameApp(App[GameOutcome | None]):
     def return_to_setup(self, settings: SessionSettings) -> None:
         self._game_screen = None
         self.switch_screen(SetupScreen(seed=settings.seed, config=settings.config,
-                                       mode=settings.mode))
+                                       mode=settings.mode,
+                                       objective=settings.objective))
 
     def action_quit_application(self) -> None:
         outcome = self._game_screen.outcome if self._game_screen is not None else None

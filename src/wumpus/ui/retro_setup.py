@@ -9,6 +9,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Input, Label, RadioButton, RadioSet, Static
 
 from wumpus.game.config import GameConfig
+from wumpus.game.objective import GameObjective
 from wumpus.ui.retro_session import (
     INVALID_CONFIG_TITLE,
     GameMode,
@@ -45,7 +46,7 @@ class SetupScreen(Screen[None]):
 
     #setup-box {{
         width: 58;
-        height: 38;
+        height: 44;
         border: double {RETRO_BORDER};
         background: {RETRO_PANEL_BACKGROUND};
         padding: 1 3;
@@ -64,6 +65,7 @@ class SetupScreen(Screen[None]):
     }}
 
     #mode-set {{ height: 5; border: none; padding: 0; }}
+    #objective-set {{ height: 5; border: none; padding: 0; }}
     .count-row {{ height: 3; align: center middle; }}
     .count-label {{ width: 18; }}
     .count-input {{ width: 10; }}
@@ -82,6 +84,8 @@ class SetupScreen(Screen[None]):
     BINDINGS = [
         Binding("1", "select_autonomous", "AUTÔNOMO"),
         Binding("2", "select_manual", "JOGADOR"),
+        Binding("3", "select_escape_fast", "ESCAPAR RÁPIDO"),
+        Binding("4", "select_collect_all_gold", "TODOS OS OUROS"),
         Binding("enter", "start_game", "INICIAR", priority=True),
         Binding("q", "quit_setup", "SAIR", priority=True),
     ]
@@ -92,11 +96,13 @@ class SetupScreen(Screen[None]):
         seed: int | None,
         config: GameConfig | None = None,
         mode: GameMode | None = None,
+        objective: GameObjective | None = None,
     ) -> None:
         super().__init__()
         self.seed = seed
         self.config = config if config is not None else GameConfig()
         self.selected_mode = mode
+        self.selected_objective = objective
 
     def compose(self) -> ComposeResult:
         with Center():
@@ -106,6 +112,16 @@ class SetupScreen(Screen[None]):
                 with RadioSet(id="mode-set"):
                     yield RadioButton("[1] AGENTE AUTÔNOMO", id="mode-autonomous")
                     yield RadioButton("[2] JOGADOR", id="mode-manual")
+                yield Label("ESCOLHA O OBJETIVO", classes="section-title")
+                with RadioSet(id="objective-set"):
+                    yield RadioButton(
+                        "[3] ESCAPAR O MAIS RÁPIDO POSSÍVEL",
+                        id="objective-fast",
+                    )
+                    yield RadioButton(
+                        "[4] COLETAR TODOS OS OUROS",
+                        id="objective-collect-all",
+                    )
                 yield Label("CONFIGURAÇÃO DA CAVERNA", classes="section-title")
                 for label, field_id, attribute in COUNT_FIELDS:
                     with Horizontal(classes="count-row"):
@@ -125,7 +141,9 @@ class SetupScreen(Screen[None]):
     def on_mount(self) -> None:
         if self.selected_mode is not None:
             self._select_mode(self.selected_mode)
-        else:
+        if self.selected_objective is not None:
+            self._select_objective(self.selected_objective)
+        if self.selected_mode is None:
             self.query_one("#mode-set", RadioSet).focus()
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
@@ -133,7 +151,11 @@ class SetupScreen(Screen[None]):
             self.selected_mode = GameMode.AUTONOMOUS
         elif event.pressed.id == "mode-manual":
             self.selected_mode = GameMode.MANUAL
-        self.query_one("#start-game", Button).disabled = self.selected_mode is None
+        elif event.pressed.id == "objective-fast":
+            self.selected_objective = GameObjective.ESCAPE_FAST
+        elif event.pressed.id == "objective-collect-all":
+            self.selected_objective = GameObjective.COLLECT_ALL_GOLD
+        self._refresh_start_enabled()
         self._show_error("")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -151,9 +173,18 @@ class SetupScreen(Screen[None]):
     def action_select_manual(self) -> None:
         self._select_mode(GameMode.MANUAL)
 
+    def action_select_escape_fast(self) -> None:
+        self._select_objective(GameObjective.ESCAPE_FAST)
+
+    def action_select_collect_all_gold(self) -> None:
+        self._select_objective(GameObjective.COLLECT_ALL_GOLD)
+
     def action_start_game(self) -> None:
         if self.selected_mode is None:
             self._show_error("Escolha AUTÔNOMO ou JOGADOR antes de iniciar.")
+            return
+        if self.selected_objective is None:
+            self._show_error("Escolha um OBJETIVO antes de iniciar.")
             return
         try:
             values = {
@@ -176,6 +207,7 @@ class SetupScreen(Screen[None]):
             mode=self.selected_mode,
             seed=self.seed,
             game_config=config,
+            objective=self.selected_objective,
         )
         self.app.start_session(settings)  # type: ignore[attr-defined]
 
@@ -186,7 +218,22 @@ class SetupScreen(Screen[None]):
         button_id = "#mode-autonomous" if mode is GameMode.AUTONOMOUS else "#mode-manual"
         self.query_one(button_id, RadioButton).value = True
         self.selected_mode = mode
-        self.query_one("#start-game", Button).disabled = False
+        self._refresh_start_enabled()
+
+    def _select_objective(self, objective: GameObjective) -> None:
+        button_id = (
+            "#objective-fast"
+            if objective is GameObjective.ESCAPE_FAST
+            else "#objective-collect-all"
+        )
+        self.query_one(button_id, RadioButton).value = True
+        self.selected_objective = objective
+        self._refresh_start_enabled()
+
+    def _refresh_start_enabled(self) -> None:
+        self.query_one("#start-game", Button).disabled = (
+            self.selected_mode is None or self.selected_objective is None
+        )
 
     def _show_error(self, message: str) -> None:
         self.query_one("#setup-error", Static).update(message)
