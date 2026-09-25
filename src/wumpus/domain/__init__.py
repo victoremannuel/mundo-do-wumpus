@@ -3,11 +3,13 @@
 from wumpus.domain.coordinate import Position
 from wumpus.domain.enums import Action, Direction, EntityType
 from wumpus.domain.models import ActionResult
+from wumpus.domain.observation import AgentObservation
 from wumpus.domain.perception import Perception
 
 __all__ = (
     "Action",
     "ActionResult",
+    "AgentObservation",
     "Direction",
     "EntityType",
     "Perception",

@@ -31,6 +31,35 @@ proving that the centralized death penalty remains exactly `-1000`.
 Evidence:
 Sections 11, 12, 89, and `tests/unit/test_world.py`.
 
+## DEC-002 — Start position and direction live in game configuration
+
+Date: 2026-09-24
+Status: ACCEPTED
+Affected phase(s): FASE 7 — Engine
+
+Context:
+Section 5 fixes the start at `[1,1]` facing North, and sections 57 and 58
+forbid any agent dependency on the environment. The temporary agent of FASE 7
+needs the exit position to decide `CLIMB`.
+
+Decision:
+`START_POSITION` and `START_DIRECTION` are defined once in
+`src/wumpus/game/config.py`. `World` imports them and `wumpus.environment`
+keeps re-exporting them for existing callers.
+
+Reason:
+It preserves a single source of truth for a game rule and lets the agent layer
+know the exit without importing the environment package.
+
+Consequences:
+Agent modules depend on `wumpus.game.config` only. `wumpus.game.__init__` must
+not be imported by the environment, so `World` and `MapGenerator` import
+`wumpus.game.config` directly to avoid an import cycle.
+
+Evidence:
+Sections 5, 57, and 58; `src/wumpus/game/config.py`;
+`tests/unit/test_simple_agent.py::test_agent_module_never_references_the_environment`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

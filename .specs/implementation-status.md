@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 7 — Engine (`NOT_STARTED`)
+FASE 8 — Memory (`NOT_STARTED`)
 
 ## Phase ledger
 
@@ -27,7 +27,7 @@ rename, merge, or reorder phases.
 | FASE 4 — Ambiente | `VERIFIED` | `26 passed` targeted; `69 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 5 — Flecha | `VERIFIED` | `35 passed` targeted; `78 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 6 — Morcegos | `VERIFIED` | `42 passed` targeted; `85 passed` full; `compileall` passed; audit `COMPLIANT`. |
-| FASE 7 — Engine | `NOT_STARTED` | — |
+| FASE 7 — Engine | `VERIFIED` | `24 passed` targeted; `109 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 8 — Memory | `NOT_STARTED` | — |
 | FASE 9 — Knowledge Base | `NOT_STARTED` | — |
 | FASE 10 — Inference Engine | `NOT_STARTED` | — |
@@ -49,45 +49,57 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 6 — Morcegos.
-- Completed acceptance criteria: Implemented and tested injected-RNG bat
-  teleportation, all destination categories, immediate lethal resolution,
-  orientation preservation, persistent bats, chained teleports, a 100-step
-  structural limit, non-bat fallback with a technical event, and a controlled
-  error when no fallback destination exists.
-- Remaining acceptance criteria: None for FASE 6.
-- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_bats.py
-  tests/unit/test_world.py tests/unit/test_arrow.py -q`; `.venv/bin/python -m
-  pytest -q`; `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `42 passed`; full suite `85 passed`; compilation exit
-  0; verification `PASS`; specification compliance `COMPLIANT`.
+- Last completed phase: FASE 7 — Engine.
+- Completed acceptance criteria: Implemented the functional game loop
+  (`observe → render hook → decide → execute → process_result → final render`),
+  the reduced `AgentObservation` surface, terminal statuses `ESCAPED`, `DEAD`, and
+  `TURN_LIMIT` with `MAX_TURNS = 2000`, the end-of-game outcome report, and the
+  temporary `SimpleAgent` deciding only from observations with an injected RNG.
+- Remaining acceptance criteria: None for FASE 7.
+- Last verified commands: `.venv/bin/python -m pytest tests/unit/test_engine.py
+  tests/unit/test_simple_agent.py -q`; `.venv/bin/python -m pytest -q`;
+  `.venv/bin/python -m compileall -q src`; seeded loop smoke run for seeds 1,
+  42, and 2026.
+- Result: Targeted tests `24 passed`; full suite `109 passed`; compilation exit
+  0; seeded runs reproducible; verification `PASS`; specification compliance
+  `COMPLIANT`. Independent critical-phase reviews found and drove corrections
+  for render ordering, final rendering, premature outcome status, anti-cheat
+  coverage, and overclaimed final-statistics traceability.
 - Expected post-checkpoint worktree: Clean for task-owned files.
-- Working tree notes: The harness and canonical specification files were
-  pre-existing ignored files. Only the two required state files are included
-  from that ignored set; no unrelated harness files are checkpointed.
+- Working tree notes: `__pycache__` directories remain untracked and are never
+  staged. The canonical specification files stay in the ignored `.specs`
+  directory; only the three required state files are checkpointed from it.
 
 ## Files changed in current phase
 
-- `src/wumpus/environment/__init__.py`
-- `src/wumpus/environment/bats.py`
+- `src/wumpus/agent/__init__.py`
+- `src/wumpus/agent/simple_agent.py`
+- `src/wumpus/domain/__init__.py`
+- `src/wumpus/domain/observation.py`
+- `src/wumpus/environment/generator.py`
 - `src/wumpus/environment/world.py`
-- `tests/unit/test_arrow.py`
-- `tests/unit/test_bats.py`
-- `tests/unit/test_world.py`
+- `src/wumpus/game/__init__.py`
+- `src/wumpus/game/config.py`
+- `src/wumpus/game/engine.py`
+- `tests/unit/test_engine.py`
+- `tests/unit/test_simple_agent.py`
 - `.specs/implementation-status.md`
+- `.specs/decisions.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Sections 23, 25, 61, and 92: entering a bat teleports through injected RNG,
-  leaves the bat in place, preserves orientation, resolves the destination,
-  and reports the event in `ActionResult`.
-- Sections 24 and 95: BAT→BAT chains continue with a bounded 100-step loop,
-  then use a non-bat fallback and technical event or a controlled error.
-- Sections 93–94: bat destinations containing a pit or live Wumpus cause
-  immediate death with centralized scoring.
-- Sections 114, 119, and 125–126: seeded teleportation is reproducible without
-  global random state, and the phase has passing edge-case coverage.
+- Section 60: `GameEngine.step` runs the exact plan loop and exposes an
+  optional pre-decision render hook; `GameEngine.run` invokes the final render
+  hook after the terminal outcome, keeping rendering outside engine rules.
+- Sections 57 and 58: `AgentObservation` carries only position, direction,
+  perception, score, collected gold, and active state; the agent layer has no
+  reference to `World` or the real map.
+- Section 26: the loop stops on escape from `[1,1]` and on death.
+- Sections 105 and 124: the loop is bounded by `MAX_TURNS = 2000` and finishes
+  with `TURN_LIMIT` instead of running forever.
+- Sections 119 FASE 7, 125, and 126: the temporary `SimpleAgent` makes the game
+  work mechanically and stays deterministic under an injected `random.Random`.
 
 ## Current blockers
 
@@ -96,13 +108,19 @@ rename, merge, or reorder phases.
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- Strategic shooting decisions remain outside FASE 5.
-- The functional game loop remains intentionally unimplemented until FASE 7.
+- `SimpleAgent` is intentionally non-intelligent and has no memory, inference,
+  planning, or risk evaluation; FASE 8 onwards replaces it.
+- The final summary remains incomplete for sections 78 and 109: reason,
+  shooting count, exploration percentage, and seed are deferred to the later
+  statistics/UI/CLI work. FASE 7 exposes only the terminal engine data it can
+  already prove and does not claim those sections as verified.
+- Console rendering, debug map, and the CLI remain unimplemented until FASE 16
+  to FASE 18; the engine exposes `on_render` and `on_render_final` hooks for them.
 
 ## Next action
 
-Begin FASE 7 — Engine by extracting its exact contract and creating the
-functional game loop with only the plan-required temporary simple agent.
+Begin FASE 8 — Memory by implementing the agent memory of visited rooms and
+perception history, without advanced inference.
 
 ## Checkpoint update contract
 
@@ -124,5 +142,6 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 6 — Morcegos verified after focused tests, full regression,
-source compilation, architecture verification, and specification compliance.
+2026-09-24 — FASE 7 — Engine verified after focused tests, full regression,
+source compilation, seeded loop reproduction, architecture verification, and
+specification compliance.

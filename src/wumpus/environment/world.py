@@ -5,6 +5,7 @@ import random
 from wumpus.domain import (
     Action,
     ActionResult,
+    AgentObservation,
     Direction,
     EntityType,
     Perception,
@@ -20,10 +21,9 @@ from wumpus.environment.bats import (
 from wumpus.environment.generator import GeneratedMap
 from wumpus.environment.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 from wumpus.environment.sensors import sense
+from wumpus.game.config import START_DIRECTION, START_POSITION
 
 
-START_POSITION = Position(1, 1)
-START_DIRECTION = Direction.NORTH
 INVALID_CLIMB_EVENT = "Tentativa inválida de saída."
 
 
@@ -101,6 +101,18 @@ class World:
     @property
     def last_event(self) -> str | None:
         return self._last_event
+
+    def observation(self) -> AgentObservation:
+        """Return the only information surface exposed to the agent."""
+
+        return AgentObservation(
+            position=self._agent_position,
+            direction=self._agent_direction,
+            perception=self.observe(),
+            score=self._score,
+            collected_gold=self._collected_gold,
+            active=not self._game_over,
+        )
 
     def observe(self) -> Perception:
         """Return current perceptions and consume transient event signals."""

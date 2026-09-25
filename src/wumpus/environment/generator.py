@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from wumpus.domain import EntityType, Position
-from wumpus.game import GameConfig
+from wumpus.game.config import GameConfig
 
 
 SAFE_INITIAL_CELLS = frozenset(

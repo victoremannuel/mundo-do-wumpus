@@ -2,6 +2,14 @@
 
 from dataclasses import dataclass
 
+from wumpus.domain import Direction, Position
+
+
+START_POSITION = Position(1, 1)
+START_DIRECTION = Direction.NORTH
+
+MAX_TURNS = 2000
+
 
 @dataclass
 class GameConfig:
