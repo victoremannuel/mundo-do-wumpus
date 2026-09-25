@@ -7,19 +7,32 @@ of predictable single-column width so the panels stay aligned.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import MappingProxyType
 
 from rich.text import Text
 
 from wumpus.agent.reasoning import DecisionReason
 from wumpus.domain import Direction, Perception, Position
+from wumpus.game.config import GameConfig
 from wumpus.game.engine import GameOutcome
+from wumpus.ui.retro_animation import (
+    sensor_is_emphasised,
+    sensor_motif,
+)
+from wumpus.ui.retro_session import MODE_LABELS, GameMode
 from wumpus.ui.retro_state import TurnSnapshot
-from wumpus.ui.retro_tiles import TileKind, tile_style
+from wumpus.ui.retro_tiles import (
+    LEGEND_ICON_HEIGHT,
+    LEGEND_ICON_WIDTH,
+    TileKind,
+    legend_icon,
+    tile_style,
+)
 from wumpus.ui.symbols import (
+    RETRO_BANNER_STYLE,
     RETRO_LABEL_STYLE,
     RETRO_OUTCOME_STYLES,
-    RETRO_SENSOR_INDICATOR,
     RETRO_SENSOR_OFF_STYLE,
     RETRO_SENSOR_ON_STYLES,
     RETRO_STATUS_STYLES,
@@ -30,12 +43,36 @@ from wumpus.ui.symbols import (
 
 
 TITLE = "M U N D O   D O   W U M P U S"
-SUBTITLE = "LOGICAL AUTONOMOUS AGENT"
+SUBTITLE = "RETRO CAVE EXPLORATION"
 
 KNOWN_MAP_TITLE = "MAPA CONHECIDO PELO AGENTE"
 REAL_MAP_TITLE = "MAPA REAL — DEBUG"
 
-CONTROLS = "[P] PAUSE   [N] STEP   [D] DEBUG   [-] SLOWER   [+] FASTER   [Q] QUIT"
+# One control bar per mode: an autonomous run is driven by execution keys, a
+# manual run by movement keys, and showing the other mode's keys would only
+# invite presses that do nothing.
+AUTONOMOUS_CONTROLS = (
+    "[P] PAUSE  [N] STEP  [D] DEBUG  [-] SLOWER  [+] FASTER  [R] RESTART  [Q] QUIT"
+)
+MANUAL_CONTROLS = (
+    "[↑] MOVER  [←/→] VIRAR  [G] PEGAR  [F] ATIRAR  [E] SUBIR"
+    "  [D] DEBUG  [R] RESTART  [Q] QUIT"
+)
+CONTROLS = AUTONOMOUS_CONTROLS
+
+MODE_CONTROLS = MappingProxyType(
+    {
+        GameMode.AUTONOMOUS: AUTONOMOUS_CONTROLS,
+        GameMode.MANUAL: MANUAL_CONTROLS,
+    }
+)
+
+DECISION_TITLES = MappingProxyType(
+    {
+        GameMode.AUTONOMOUS: "DECISÃO",
+        GameMode.MANUAL: "COMANDO",
+    }
+)
 
 _LABEL_WIDTH = 10
 
@@ -57,20 +94,22 @@ _LEGEND_ROWS = (
     (("DESCONHECIDO", TileKind.UNKNOWN), ("MORCEGO", TileKind.BAT)),
     ((None, None), ("OURO", TileKind.GOLD)),
 )
-_LEGEND_COLUMN_WIDTH = 20
+_LEGEND_LABEL_WIDTH = 13
+_LEGEND_COLUMN_WIDTH = LEGEND_ICON_WIDTH + 1 + _LEGEND_LABEL_WIDTH
+LEGEND_HEIGHT = len(_LEGEND_ROWS) * LEGEND_ICON_HEIGHT
 
 
 def format_position(position: Position) -> str:
     return f"[{position.row},{position.col}]"
 
 
-def render_header() -> Text:
+def render_header(banner: str | None = None) -> Text:
     """Build the compact title bar; the board, not the header, is the focus."""
 
     text = Text(no_wrap=True, overflow="ellipsis", justify="center")
     text.append(TITLE, style=f"bold {RETRO_TEXT}")
     text.append("   ·   ", style=RETRO_TEXT_DIM)
-    text.append(SUBTITLE, style=RETRO_TEXT_DIM)
+    text.append(banner or SUBTITLE, style=RETRO_BANNER_STYLE if banner else RETRO_TEXT_DIM)
     return text
 
 
@@ -88,16 +127,24 @@ def sensor_readings(perception: Perception) -> tuple[tuple[str, bool], ...]:
     return tuple(zip(SENSOR_LABELS, values))
 
 
-def render_sensors(perception: Perception) -> Text:
+def render_sensors(
+    perception: Perception,
+    sensor_phases: Mapping[str, int] | None = None,
+) -> Text:
     """Build the sensor panel as lit and unlit indicators."""
 
     text = Text(no_wrap=True, overflow="ellipsis")
+    phases = sensor_phases or {}
     for index, (label, active) in enumerate(sensor_readings(perception)):
         if index:
             text.append("\n")
+        phase = phases.get(label)
         style = RETRO_SENSOR_ON_STYLES[label] if active else RETRO_SENSOR_OFF_STYLE
-        text.append(f"{RETRO_SENSOR_INDICATOR} ", style=style)
-        text.append(f"{label:<12}", style=style if active else RETRO_LABEL_STYLE)
+        label_style = style if active else RETRO_LABEL_STYLE
+        if sensor_is_emphasised(phase):
+            label_style = f"bold {style}"
+        text.append(f"{sensor_motif(label, phase, active=active)} ", style=style)
+        text.append(f"{label:<10}", style=label_style)
         text.append("ON " if active else "OFF", style=style)
     return text
 
@@ -110,6 +157,8 @@ def render_agent_status(
     speed_label: str,
     seed: int | None,
     debug_enabled: bool,
+    mode: GameMode = GameMode.AUTONOMOUS,
+    config: GameConfig | None = None,
 ) -> Text:
     """Build the agent HUD, including execution state the player controls."""
 
@@ -119,6 +168,14 @@ def render_agent_status(
     _append_field(text, "OURO", str(snapshot.collected_gold))
     _append_field(text, "SCORE", str(snapshot.score))
     _append_field(text, "TURNOS", str(turns))
+    _append_field(text, "MODO", MODE_LABELS[mode])
+    game_config = config if config is not None else GameConfig()
+    _append_field(
+        text,
+        "W/P/G/B",
+        f"{game_config.wumpus_count} / {game_config.pit_count} / "
+        f"{game_config.gold_count} / {game_config.bat_count}",
+    )
     text.append("\n")
     _append_field(
         text,
@@ -132,7 +189,9 @@ def render_agent_status(
     return text
 
 
-def render_decision(reason: DecisionReason | None) -> Text:
+def render_decision(
+    reason: DecisionReason | None, mode: GameMode = GameMode.AUTONOMOUS
+) -> Text:
     """Build the reasoning panel from the agent's own structured decision."""
 
     text = Text(overflow="fold")
@@ -143,11 +202,15 @@ def render_decision(reason: DecisionReason | None) -> Text:
     text.append("AÇÃO\n", style=RETRO_LABEL_STYLE)
     action_name = reason.action.name if reason.action is not None else "-"
     text.append(f"{action_name}\n\n", style=RETRO_VALUE_STYLE)
-    text.append("ALVO\n", style=RETRO_LABEL_STYLE)
-    target = "-" if reason.target is None else format_position(reason.target)
-    text.append(f"{target}\n\n", style=RETRO_VALUE_STYLE)
-    text.append("MOTIVO\n", style=RETRO_LABEL_STYLE)
-    text.append(reason.reason, style=RETRO_TEXT)
+    if mode is GameMode.MANUAL:
+        text.append("ORIGEM\n", style=RETRO_LABEL_STYLE)
+        text.append("JOGADOR", style=RETRO_VALUE_STYLE)
+    else:
+        text.append("ALVO\n", style=RETRO_LABEL_STYLE)
+        target = "-" if reason.target is None else format_position(reason.target)
+        text.append(f"{target}\n\n", style=RETRO_VALUE_STYLE)
+        text.append("MOTIVO\n", style=RETRO_LABEL_STYLE)
+        text.append(reason.reason, style=RETRO_TEXT)
     return text
 
 
@@ -155,26 +218,37 @@ def render_legend() -> Text:
     """Build the legend using exactly the styles the board uses."""
 
     text = Text(no_wrap=True, overflow="ellipsis")
-    for index, row in enumerate(_LEGEND_ROWS):
-        if index:
-            text.append("\n")
-        for label, kind in row:
-            if label is None or kind is None:
-                text.append(" " * _LEGEND_COLUMN_WIDTH)
-                continue
-            text.append("█ ", style=tile_style(kind))
-            text.append(f"{label:<{_LEGEND_COLUMN_WIDTH - 2}}", style=RETRO_LABEL_STYLE)
+    for row_index, row in enumerate(_LEGEND_ROWS):
+        for icon_line in range(LEGEND_ICON_HEIGHT):
+            if row_index or icon_line:
+                text.append("\n")
+            for label, kind in row:
+                if label is None or kind is None:
+                    text.append(" " * _LEGEND_COLUMN_WIDTH)
+                    continue
+                text.append(legend_icon(kind)[icon_line], style=tile_style(kind))
+                text.append(" ")
+                visible_label = label if icon_line == 0 else ""
+                text.append(
+                    f"{visible_label:<{_LEGEND_LABEL_WIDTH}}",
+                    style=RETRO_LABEL_STYLE,
+                )
     return text
 
 
-def render_footer(state_label: str, speed_label: str) -> Text:
+def render_footer(
+    state_label: str,
+    speed_label: str,
+    mode: GameMode = GameMode.AUTONOMOUS,
+) -> Text:
     """Build the always-visible control bar."""
 
     text = Text(no_wrap=True, overflow="ellipsis")
-    text.append(f" {CONTROLS}", style=RETRO_TEXT_DIM)
+    text.append(f" {MODE_CONTROLS[mode]}", style=RETRO_TEXT_DIM)
     text.append("   ")
     text.append(state_label, style=RETRO_STATUS_STYLES.get(state_label, RETRO_VALUE_STYLE))
-    text.append(f"  {speed_label}", style=RETRO_TEXT_DIM)
+    if mode is GameMode.AUTONOMOUS:
+        text.append(f"  {speed_label}", style=RETRO_TEXT_DIM)
     return text
 
 

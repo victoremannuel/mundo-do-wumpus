@@ -18,7 +18,17 @@ from wumpus.ui.retro_state import (
     build_known_map_view,
     classify_known_cell,
 )
-from wumpus.ui.retro_tiles import TILE_HEIGHT, TILE_WIDTH, TileKind, tile_lines, tile_style
+from wumpus.ui.retro_panels import render_legend
+from wumpus.ui.retro_tiles import (
+    LEGEND_ICON_HEIGHT,
+    LEGEND_ICON_WIDTH,
+    TILE_HEIGHT,
+    TILE_WIDTH,
+    TileKind,
+    legend_icon,
+    tile_lines,
+    tile_style,
+)
 
 
 def every_sprite() -> list[tuple[TileKind, Direction | None]]:
@@ -45,6 +55,18 @@ def test_every_sprite_is_exactly_five_lines_of_ten_visual_columns() -> None:
 def test_every_tile_kind_has_a_style() -> None:
     for kind in TileKind:
         assert tile_style(kind)
+
+
+def test_legend_uses_distinct_recognizable_mini_sprites() -> None:
+    kinds = (TileKind.AGENT, TileKind.WUMPUS, TileKind.PIT, TileKind.BAT, TileKind.GOLD)
+    icons = {kind: legend_icon(kind) for kind in kinds}
+    assert len(set(icons.values())) == len(kinds)
+    for icon in icons.values():
+        assert len(icon) == LEGEND_ICON_HEIGHT
+        assert {cell_len(line) for line in icon} == {LEGEND_ICON_WIDTH}
+    output = render_legend().plain
+    assert all(label in output for label in ("AGENTE", "WUMPUS", "POÇO", "MORCEGO", "OURO"))
+    assert len({legend_icon(kind) for kind in TileKind}) == len(TileKind)
 
 
 def test_the_agent_has_a_distinct_sprite_for_each_of_the_four_directions() -> None:

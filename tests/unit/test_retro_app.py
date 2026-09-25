@@ -110,10 +110,10 @@ def test_the_screen_mounts_every_fixed_panel_exactly_once() -> None:
             RetroFooter,
             EndGameOverlay,
         ):
-            assert len(app.query(widget_type)) == 1, widget_type
-        assert len(app.query(PixelMapWidget)) == 2
-        assert app.query_one("#map-known", PixelMapWidget).display is True
-        assert app.query_one("#map-real", PixelMapWidget).display is False
+            assert len(app.screen.query(widget_type)) == 1, widget_type
+        assert len(app.screen.query(PixelMapWidget)) == 2
+        assert app.screen.query_one("#map-known", PixelMapWidget).display is True
+        assert app.screen.query_one("#map-real", PixelMapWidget).display is False
 
     drive(scenario)
 
@@ -128,9 +128,9 @@ def test_the_widget_tree_stays_stable_across_many_turns() -> None:
         after = len(app.screen.query("*"))
 
         assert after == before
-        assert len(app.query(PixelMapWidget)) == 2
-        assert len(app.query(AgentStatusWidget)) == 1
-        assert len(app.query(RetroFooter)) == 1
+        assert len(app.screen.query(PixelMapWidget)) == 2
+        assert len(app.screen.query(AgentStatusWidget)) == 1
+        assert len(app.screen.query(RetroFooter)) == 1
 
     drive(scenario)
 
@@ -180,11 +180,11 @@ def test_debug_toggles_the_real_board_without_touching_the_known_one() -> None:
         assert app.debug_enabled is False
         await pilot.press("d")
         assert app.debug_enabled is True
-        assert app.query_one("#map-real", PixelMapWidget).display is True
+        assert app.screen.query_one("#map-real", PixelMapWidget).display is True
         await pilot.press("d")
         assert app.debug_enabled is False
-        assert app.query_one("#map-real", PixelMapWidget).display is False
-        assert app.query_one("#map-known", PixelMapWidget).display is True
+        assert app.screen.query_one("#map-real", PixelMapWidget).display is False
+        assert app.screen.query_one("#map-known", PixelMapWidget).display is True
 
     drive(scenario)
 
@@ -255,8 +255,8 @@ def test_the_game_freezes_and_shows_the_summary_once_the_engine_is_over() -> Non
             GameStatus.DEAD,
             GameStatus.TURN_LIMIT,
         )
-        assert app.query_one("#endgame", EndGameOverlay).display is True
-        assert app.query_one("#decision", DecisionWidget).display is False
+        assert app.screen.query_one("#endgame", EndGameOverlay).display is True
+        assert app.screen.query_one("#decision", DecisionWidget).display is False
 
         frozen = engine.turns
         await pilot.press("n")
@@ -270,7 +270,7 @@ def test_the_game_freezes_and_shows_the_summary_once_the_engine_is_over() -> Non
 def test_the_summary_panel_shows_every_required_final_field() -> None:
     async def scenario(pilot: Any, app: RetroGameApp, engine: GameEngine) -> None:
         await step_until_over(pilot, engine)
-        summary = app.query_one("#endgame", EndGameOverlay).visual.plain
+        summary = app.screen.query_one("#endgame", EndGameOverlay).visual.plain
 
         for label in ("RESULT", "SCORE", "GOLD", "WUMPUS", "TURNS", "VISITED", "SEED"):
             assert label in summary
@@ -287,9 +287,9 @@ def test_the_summary_panel_shows_every_required_final_field() -> None:
 
 def test_a_terminal_below_the_minimum_shows_a_notice_instead_of_crashing() -> None:
     async def scenario(pilot: Any, app: RetroGameApp, _engine: GameEngine) -> None:
-        notice = app.query_one("#overlay-too-small")
+        notice = app.screen.query_one("#overlay-too-small")
         assert notice.display is True
-        assert "TERMINAL MUITO PEQUENO" in app.query_one("#too-small").visual.plain
+        assert "TERMINAL MUITO PEQUENO" in app.screen.query_one("#too-small").visual.plain
 
     drive(scenario, size=(95, 31))
 
@@ -302,12 +302,12 @@ def test_resizing_recovers_the_layout_without_restarting_the_game() -> None:
 
         await pilot.resize_terminal(95, 31)
         await pilot.pause()
-        assert app.query_one("#overlay-too-small").display is True
+        assert app.screen.query_one("#overlay-too-small").display is True
         assert engine.turns == turns
 
         await pilot.resize_terminal(MIN_WIDTH, MIN_HEIGHT)
         await pilot.pause()
-        assert app.query_one("#overlay-too-small").display is False
+        assert app.screen.query_one("#overlay-too-small").display is False
         assert engine.turns == turns
         assert app.finished is False
 
@@ -317,9 +317,9 @@ def test_resizing_recovers_the_layout_without_restarting_the_game() -> None:
 def test_a_wide_terminal_in_debug_mode_shows_both_boards_at_full_scale() -> None:
     async def scenario(pilot: Any, app: RetroGameApp, _engine: GameEngine) -> None:
         await pilot.press("d")
-        assert app.query_one("#map-known", PixelMapWidget).display is True
-        assert app.query_one("#map-real", PixelMapWidget).display is True
-        assert app.query_one("#sidebar").display is True
+        assert app.screen.query_one("#map-known", PixelMapWidget).display is True
+        assert app.screen.query_one("#map-real", PixelMapWidget).display is True
+        assert app.screen.query_one("#sidebar").display is True
 
     drive(scenario, size=(DUAL_MAP_WITH_SIDEBAR_MIN_WIDTH, MIN_HEIGHT))
 
@@ -327,9 +327,9 @@ def test_a_wide_terminal_in_debug_mode_shows_both_boards_at_full_scale() -> None
 def test_a_narrow_terminal_in_debug_mode_keeps_the_hud_and_promotes_the_real_board() -> None:
     async def scenario(pilot: Any, app: RetroGameApp, _engine: GameEngine) -> None:
         await pilot.press("d")
-        assert app.query_one("#map-real", PixelMapWidget).display is True
-        assert app.query_one("#map-known", PixelMapWidget).display is False
-        assert app.query_one("#sidebar").display is True
+        assert app.screen.query_one("#map-real", PixelMapWidget).display is True
+        assert app.screen.query_one("#map-known", PixelMapWidget).display is False
+        assert app.screen.query_one("#sidebar").display is True
 
     drive(scenario, size=(MIN_WIDTH, MIN_HEIGHT))
 

@@ -229,6 +229,94 @@ statistics, and the final summary statistics of plan sections 78 and 105-109.
 
 Next canonical action: FASE 21 — README final.
 
+### GAMEPLAY-TUI-ANIMATION-MANUAL-002 — Setup, manual play, and animation
+
+Status: `VERIFIED`. This is post-FASE-20 gameplay/UI maintenance and does not
+change the acceptance status of any canonical phase. The maintenance brief
+named `4f62d9c29c4480f3fa4f446b60ba96929b1006e1` as its reference, but work
+started from the later local HEAD
+`417bac70d2a3c83c58acf1a209489d86934d33a4`, where FASE 21 was already
+`VERIFIED`; no history or README work was reverted.
+
+Summary:
+
+- Added a mandatory retro `SetupScreen` with explicit autonomous/manual mode
+  selection, canonical 2/4/3/2 defaults, non-negative integer validation, and
+  the 33-cell capacity gate. `build_game(seed, config=None)` remains backward
+  compatible, while `build_session` is the composition root for restartable
+  sessions.
+- Added `HumanAgent`, which queues exactly one domain `Action`, records only
+  observations/results in its own `AgentMemory`, exposes the presentation
+  contract, performs no inference, and never receives `World` or a generated
+  map. Manual input still follows `UI -> HumanAgent -> GameEngine.step() ->
+  World.execute()`.
+- Added deterministic presentation-only animation events and one controller
+  ticker for intro, movement, turn, shot, grab, teleport, bump, death, escape,
+  Wumpus kill, and concurrent sensor feedback. Game advancement pauses while
+  frames are pending; no visual code consumes RNG or sleeps.
+- Added safe restart through `R`: both timers stop, animations and pending
+  player input are cancelled, the old session is discarded, and setup returns
+  with the previous seed/mode/counts. Manual mode has no automatic game timer.
+- Added distinct two-line legend sprites, mode-specific HUD/decision/footer
+  panels, transient map overlays, and continued 5x10 room geometry.
+
+Architecture and safety review:
+
+- `wumpus.ui` imports neither `wumpus.environment` nor `wumpus.debug`; the only
+  real-map surface is the inert `MapView` callback assembled in `main.py`.
+- The UI and `HumanAgent` do not call `World.execute`; the unchanged
+  `GameEngine.step()` remains the only game-loop entry point.
+- Animation overlays change no position, score, entity, knowledge, perception,
+  or outcome. Shot and sensor effects expose no hidden coordinate.
+- Restart/unmount stop the current timer pair. Tests freeze the discarded
+  engine and cancel its controller, and 50 animation frames preserve the
+  widget count.
+- No `random`, `secrets`, or `time.sleep()` use exists under `wumpus.ui`.
+
+Files created:
+
+- `src/wumpus/agent/human_agent.py`
+- `src/wumpus/ui/retro_animation.py`
+- `src/wumpus/ui/retro_session.py`
+- `src/wumpus/ui/retro_setup.py`
+- `tests/unit/test_game_configuration.py`
+- `tests/unit/test_human_agent.py`
+- `tests/unit/test_retro_animation.py`
+- `tests/unit/test_retro_setup.py`
+
+Files changed:
+
+- `main.py`; `src/wumpus/agent/__init__.py`;
+  `src/wumpus/environment/generator.py`; `src/wumpus/game/config.py`;
+  `src/wumpus/ui/retro_app.py`; `retro_map.py`; `retro_panels.py`;
+  `retro_state.py`; `retro_tiles.py`; `symbols.py`;
+  `tests/unit/test_retro_app.py`; `tests/unit/test_retro_tiles.py`;
+  `.specs/implementation-status.md`; `.specs/traceability.md`.
+
+Commands and results:
+
+- Directed gameplay/UI/configuration/anti-cheat/E2E selection — `113 passed`.
+- `.venv/bin/python -m pytest -q` — `337 passed`.
+- `.venv/bin/python -m compileall -q src main.py` — exit 0.
+- `git diff --check` — clean.
+- `.venv/bin/python main.py --seed 42 --legacy-console --no-delay` —
+  `ESCAPED`, score 936, one gold, 64 turns (unchanged deterministic outcome).
+- Real PTY at 140x46: setup, autonomous and manual layouts, intro/action
+  animation, mode-specific footer, debug map, `R` back to setup, and fixed
+  no-scroll layout approved. The 80x24 smoke showed the minimum-size notice
+  without traceback. Custom 1/2/5/3 debug-map counts and all six distinct
+  sensor frame sequences are additionally covered by deterministic UI tests.
+
+Known limitations: Textual/Rich repaint escape sequences are verbose when a
+PTY is captured as a log, but the live terminal uses its alternate screen and
+does not scroll. Ruff remains unconfigured/not installed. The pre-existing
+final-project audit blockers for plan sections 78 and 106–109 remain outside
+this maintenance.
+
+Next action: resolve the existing final-project audit blockers with explicit
+scope authorization. FASE 21 was already verified before this maintenance and
+remains verified.
+
 ## Checkpoint update contract
 
 After each phase attempt, update:
@@ -248,6 +336,14 @@ suite, and specification compliance all pass. Commit the state file in the same
 checkpoint as the implementation it describes.
 
 ## Last update
+
+2026-09-25 — GAMEPLAY-TUI-ANIMATION-MANUAL-002 verified: added explicit
+pre-game setup, configurable entity counts, autonomous/manual sessions,
+`HumanAgent`, deterministic action/sensor animations, safe restart, and mini
+sprite legend. Directed suite `113 passed`; full suite `337 passed`;
+compileall and diff check passed; real-PTY autonomous/manual/restart/debug
+smokes passed. FASE 21 was already verified at the received HEAD and remains
+unchanged.
 
 2026-09-25 — FASE 21 — README final verified: replaced the scaffold README
 with plan-required academic, rules, architecture, algorithm, knowledge,

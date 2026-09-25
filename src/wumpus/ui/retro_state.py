@@ -73,6 +73,39 @@ class MapView:
 
 
 @dataclass(frozen=True)
+class MapOverlay:
+    """Ephemeral decoration drawn on top of a `MapView` for one frame.
+
+    An overlay is never authoritative. It cannot move the agent, change a score,
+    or alter what the knowledge base believes: it only decorates rooms the game
+    has *already* reported something about, and the moment the animation ends the
+    board returns to the plain `MapView` again.
+    """
+
+    agent_style: str | None = None
+    agent_sprite: tuple[str, ...] | None = None
+    agent_hidden: bool = False
+    trail: tuple[Position, ...] = ()
+    trail_style: str | None = None
+    projectile: Position | None = None
+    projectile_sprite: tuple[str, ...] | None = None
+    projectile_style: str | None = None
+    cell_flash: tuple[tuple[Position, str], ...] = ()
+    cell_flash_sprite: tuple[str, ...] | None = None
+
+    @property
+    def flashes(self) -> Mapping[Position, str]:
+        return dict(self.cell_flash)
+
+    @property
+    def is_empty(self) -> bool:
+        return self == _EMPTY_OVERLAY
+
+
+_EMPTY_OVERLAY = MapOverlay()
+
+
+@dataclass(frozen=True)
 class TurnSnapshot:
     """The agent-visible state the HUD shows for the current frame."""
 

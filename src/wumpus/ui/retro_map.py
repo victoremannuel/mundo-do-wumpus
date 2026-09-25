@@ -12,8 +12,15 @@ from __future__ import annotations
 from rich.text import Text
 
 from wumpus.domain import Position
-from wumpus.ui.retro_state import MapView
-from wumpus.ui.retro_tiles import TILE_HEIGHT, TILE_WIDTH, TileKind, tile_lines, tile_style
+from wumpus.ui.retro_state import MapOverlay, MapView
+from wumpus.ui.retro_tiles import (
+    TILE_HEIGHT,
+    TILE_WIDTH,
+    TRAIL_SPRITE,
+    TileKind,
+    tile_lines,
+    tile_style,
+)
 from wumpus.ui.symbols import RETRO_BORDER_STYLE, RETRO_COORD_STYLE
 
 
@@ -34,8 +41,13 @@ def map_board_height(rows: int) -> int:
     return MAP_RULER_HEIGHT + 1 + rows * (TILE_HEIGHT + 1)
 
 
-def render_map(view: MapView) -> Text:
-    """Render the whole board as one styled, non-wrapping block of text."""
+def render_map(view: MapView, overlay: MapOverlay | None = None) -> Text:
+    """Render the whole board as one styled, non-wrapping block of text.
+
+    The optional overlay decorates single rooms for the duration of one animation
+    frame. It never changes the board's geometry, and once it is gone every room
+    is drawn from the `MapView` alone again.
+    """
 
     text = Text(no_wrap=True, overflow="ignore")
     text.append(_ruler(view.cols), style=RETRO_COORD_STYLE)
@@ -44,7 +56,7 @@ def render_map(view: MapView) -> Text:
 
     for index, row in enumerate(range(view.rows, 0, -1)):
         text.append("\n")
-        _append_room_row(text, view, row)
+        _append_room_row(text, view, row, overlay)
         text.append("\n")
         corners = ("└", "┴", "┘") if index == view.rows - 1 else ("├", "┼", "┤")
         text.append(_rule_line(view.cols, *corners), style=RETRO_BORDER_STYLE)
@@ -71,13 +83,15 @@ def _rule_line(cols: int, left: str, middle: str, right: str) -> str:
     )
 
 
-def _append_room_row(text: Text, view: MapView, row: int) -> None:
-    kinds: list[TileKind] = []
+def _append_room_row(
+    text: Text, view: MapView, row: int, overlay: MapOverlay | None = None
+) -> None:
+    styles: list[str] = []
     sprites: list[tuple[str, ...]] = []
     for col in range(1, view.cols + 1):
-        kind = view.kind_at(Position(row, col))
-        kinds.append(kind)
-        sprites.append(tile_lines(kind, view.agent_direction))
+        sprite, style = _room_art(view, Position(row, col), overlay)
+        sprites.append(sprite)
+        styles.append(style)
 
     for line_index in range(TILE_HEIGHT):
         if line_index:
@@ -88,7 +102,55 @@ def _append_room_row(text: Text, view: MapView, row: int) -> None:
             else " " * MAP_GUTTER_WIDTH
         )
         text.append(label, style=RETRO_COORD_STYLE)
-        for column_index, kind in enumerate(kinds):
+        for column_index, style in enumerate(styles):
             text.append("│", style=RETRO_BORDER_STYLE)
-            text.append(sprites[column_index][line_index], style=tile_style(kind))
+            text.append(sprites[column_index][line_index], style=style)
         text.append("│", style=RETRO_BORDER_STYLE)
+
+
+def _room_art(
+    view: MapView, position: Position, overlay: MapOverlay | None
+) -> tuple[tuple[str, ...], str]:
+    """Pick the sprite and style for one room, effects last and on top.
+
+    Order matters: the authoritative tile is resolved first, then an animation may
+    paint over it. Because the overlay is discarded when the animation ends, the
+    room always falls back to exactly what the knowledge base says.
+    """
+
+    kind = view.kind_at(position)
+    is_agent = position == view.agent_position
+
+    if overlay is not None and is_agent and overlay.agent_hidden:
+        kind = view.tiles.get(position, TileKind.UNKNOWN)
+        is_agent = False
+
+    sprite = tile_lines(kind, view.agent_direction)
+    style = tile_style(kind)
+
+    if overlay is None:
+        return sprite, style
+
+    if position in overlay.trail:
+        return TRAIL_SPRITE, overlay.trail_style or style
+    if position == overlay.projectile:
+        return (
+            overlay.projectile_sprite or sprite,
+            overlay.projectile_style or style,
+        )
+
+    flashes = overlay.flashes
+    if position in flashes:
+        style = flashes[position]
+        if overlay.cell_flash_sprite is not None:
+            sprite = overlay.cell_flash_sprite
+
+    # A hidden agent's room can still carry an effect sprite -- that is how a
+    # teleport shows glitch blocks where the agent is not drawn.
+    if position == view.agent_position and overlay.agent_sprite is not None:
+        sprite = overlay.agent_sprite
+        style = overlay.agent_style or style
+    elif is_agent and overlay.agent_style is not None:
+        style = overlay.agent_style
+
+    return sprite, style

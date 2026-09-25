@@ -25,7 +25,7 @@ _SRC_DIR = Path(__file__).resolve().parent / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from wumpus.agent import SimpleAgent
+from wumpus.agent import HumanAgent, SimpleAgent
 from wumpus.debug.renderer import DebugRenderer
 from wumpus.domain import AgentObservation
 from wumpus.environment import MapGenerator, World
@@ -77,15 +77,51 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def build_game(seed: int | None) -> tuple[World, SimpleAgent]:
+def build_game(
+    seed: int | None, config: GameConfig | None = None
+) -> tuple[World, SimpleAgent]:
     """Assemble one real world and one isolated agent from a single seed."""
 
     rng = random.Random(seed)
-    config = GameConfig()
+    game_config = config if config is not None else GameConfig()
+    generated_map = MapGenerator(rng, game_config).generate()
+    world = World(generated_map, rng=rng)
+    agent = SimpleAgent(rng, game_config)
+    return world, agent
+
+
+def build_session(settings: object) -> object:
+    """Assemble a TUI session without exposing the real world to `wumpus.ui`."""
+
+    from wumpus.debug.retro_renderer import build_real_map_view
+    from wumpus.ui.retro_session import GameMode, GameSession, SessionSettings
+
+    if not isinstance(settings, SessionSettings):
+        raise TypeError("settings must be SessionSettings")
+    config = settings.config
+    rng = random.Random(settings.seed)
     generated_map = MapGenerator(rng, config).generate()
     world = World(generated_map, rng=rng)
-    agent = SimpleAgent(rng, config)
-    return world, agent
+
+    if settings.mode is GameMode.MANUAL:
+        agent = HumanAgent(config)
+        submitter = agent.queue_action
+        clearer = agent.clear_pending_action
+    else:
+        agent = SimpleAgent(rng, config)
+        submitter = None
+        clearer = None
+
+    return GameSession(
+        engine=GameEngine(world, agent),
+        presentation_source=agent,
+        initial_observation=world.observation(),
+        mode=settings.mode,
+        settings=settings,
+        debug_map_source=lambda: build_real_map_view(world.debug_snapshot()),
+        manual_action_submitter=submitter,
+        manual_action_clearer=clearer,
+    )
 
 
 def run(argv: list[str] | None = None) -> GameOutcome:
@@ -156,20 +192,14 @@ def run_tui(args: argparse.Namespace) -> GameOutcome | None:
     reproducible.
     """
 
-    from wumpus.debug.retro_renderer import build_real_map_view
     from wumpus.ui.retro_app import RetroGameApp
 
-    world, agent = build_game(args.seed)
-    engine = GameEngine(world, agent)
     app = RetroGameApp(
-        engine=engine,
-        agent=agent,
-        initial_observation=world.observation(),
+        session_factory=build_session,
         seed=args.seed,
         speed_index=speed_index_for(args.delay, no_delay=args.no_delay),
         start_paused=args.step,
         debug_enabled=args.debug,
-        debug_map_source=lambda: build_real_map_view(world.debug_snapshot()),
     )
     return app.run()
 

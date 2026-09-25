@@ -9,15 +9,18 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from wumpus.domain import EntityType, Position
-from wumpus.game.config import GameConfig
+from wumpus.game.config import (
+    SAFE_INITIAL_CELLS,
+    GameConfig,
+    available_entity_cells,
+)
 
 
-SAFE_INITIAL_CELLS = frozenset(
-    {
-        Position(1, 1),
-        Position(1, 2),
-        Position(2, 1),
-    }
+__all__ = (
+    "SAFE_INITIAL_CELLS",
+    "GeneratedMap",
+    "MapGenerationError",
+    "MapGenerator",
 )
 
 
@@ -104,15 +107,16 @@ class MapGenerator:
         if self._config.rows < 1 or self._config.cols < 1:
             raise MapGenerationError("Map dimensions must be positive")
 
-        if any(count < 0 for _, count in self._entity_counts()):
-            raise MapGenerationError("Entity counts cannot be negative")
+        if any(
+            not isinstance(count, int) or isinstance(count, bool) or count < 0
+            for _, count in self._entity_counts()
+        ):
+            raise MapGenerationError(
+                "Entity counts must be non-negative integers"
+            )
 
-        safe_cells_inside = sum(
-            position.is_inside(self._config.rows, self._config.cols)
-            for position in SAFE_INITIAL_CELLS
-        )
-        available_count = (
-            self._config.rows * self._config.cols - safe_cells_inside
+        available_count = available_entity_cells(
+            self._config.rows, self._config.cols
         )
         if self._entity_total() > available_count:
             raise MapGenerationError(
@@ -136,7 +140,11 @@ class MapGenerator:
             raise AssertionError("Generated entity lies in the initial safe zone")
 
         actual_counts = Counter(generated_map.entities.values())
-        expected_counts = dict(self._entity_counts())
+        expected_counts = {
+            entity_type: count
+            for entity_type, count in self._entity_counts()
+            if count
+        }
         if actual_counts != expected_counts:
             raise AssertionError("Generated entity counts do not match config")
 

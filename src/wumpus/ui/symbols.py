@@ -94,6 +94,7 @@ RETRO_STATUS_STYLES = MappingProxyType(
     {
         "RUNNING": "bold bright_green",
         "PAUSED": "bold yellow",
+        "JOGADOR": "bold bright_cyan",
         "FINISHED": "bold bright_cyan",
         "ERROR": "bold red",
     }
@@ -108,3 +109,28 @@ RETRO_OUTCOME_STYLES = MappingProxyType(
 )
 
 RETRO_SENSOR_INDICATOR = "●"
+
+
+# ---------------------------------------------------------------------------
+# Animation palette (GAMEPLAY-TUI-ANIMATION-MANUAL-002).
+#
+# Animations decorate events the game already reported, so their colours reuse
+# the meaning the board already assigns: gold stays gold, the Wumpus stays
+# magenta, a pit stays red. Nothing here is chosen at random.
+# ---------------------------------------------------------------------------
+
+RETRO_TRAIL_STYLE = "cyan"
+RETRO_AGENT_HOT_STYLE = "bold bright_white"
+RETRO_BEAM_STYLE = "bold bright_white"
+RETRO_DEATH_STYLE = "bold red"
+RETRO_ESCAPE_STYLE = "bold bright_green"
+RETRO_BANNER_STYLE = "bold bright_yellow"
+
+RETRO_GLITCH_STYLES = ("bold blue", "bold magenta")
+
+RETRO_BORDER_ALERT = "#ff4d4d"
+RETRO_BORDER_GOLD = "#ffd24d"
+RETRO_BORDER_WUMPUS = "#ff5fd2"
+RETRO_BORDER_BAT = "#6f7bff"
+RETRO_BORDER_ESCAPE = "#4dff88"
+RETRO_BORDER_IMPACT = "#ffffff"

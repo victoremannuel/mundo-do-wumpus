@@ -15,6 +15,11 @@ from wumpus.agent.exit_policy import (
     risk_threshold,
     should_explore,
 )
+from wumpus.agent.human_agent import (
+    MANUAL_REASON,
+    HumanAgent,
+    NoPendingActionError,
+)
 from wumpus.agent.knowledge import (
     KnownCell,
     KnowledgeBase,
@@ -41,6 +46,9 @@ __all__ = (
     "FORWARD_DELTA",
     "GOLD_RISK_THRESHOLD",
     "HAZARD_RISK_WEIGHTS",
+    "HumanAgent",
+    "MANUAL_REASON",
+    "NoPendingActionError",
     "InferenceEngine",
     "InferenceConflictError",
     "InferenceEvent",

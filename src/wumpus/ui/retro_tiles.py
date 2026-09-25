@@ -188,6 +188,126 @@ TILE_STYLES = MappingProxyType(
 )
 
 
+# ---------------------------------------------------------------------------
+# Legend icons
+#
+# The legend has to let a player recognise the *drawing* on the board, not just
+# its colour, so every entry carries a miniature of its own sprite built from
+# the same characters. Two lines by five columns is the smallest size at which
+# the silhouettes stay distinguishable from each other.
+# ---------------------------------------------------------------------------
+
+LEGEND_ICON_HEIGHT = 2
+LEGEND_ICON_WIDTH = 5
+
+_LEGEND_SPRITES = MappingProxyType(
+    {
+        TileKind.AGENT: ("██   ", "█████"),
+        TileKind.SAFE: ("·   ·", "  ·  "),
+        TileKind.VISITED: ("·····", "·····"),
+        TileKind.UNKNOWN: ("░░░░░", "░░?░░"),
+        TileKind.RISK: ("  ██ ", "  ██ "),
+        TileKind.WUMPUS: ("██ ██", " ███ "),
+        TileKind.DEAD_WUMPUS: ("▒▒ ▒▒", " ▒▒▒ "),
+        TileKind.PIT: ("░▒▒▒░", "█████"),
+        TileKind.BAT: ("█   █", "·███·"),
+        TileKind.GOLD: (" ███ ", "  █  "),
+        TileKind.EMPTY: ("     ", "  ·· "),
+    }
+)
+
+
+# ---------------------------------------------------------------------------
+# Effect sprites
+#
+# Purely ephemeral overlays drawn on top of a tile while an animation plays.
+# They depict something the game already reported and are chosen from fixed
+# tables, never at random, so they cannot touch the seeded run.
+# ---------------------------------------------------------------------------
+
+TRAIL_SPRITE = (
+    "          ",
+    "   ▒▒▒▒   ",
+    "  ▒▒▒▒▒▒  ",
+    "   ▒▒▒▒   ",
+    "          ",
+)
+
+PROJECTILE_SPRITES = (
+    (
+        "          ",
+        "          ",
+        "    ██    ",
+        "          ",
+        "          ",
+    ),
+    (
+        "          ",
+        "          ",
+        "  ██████  ",
+        "          ",
+        "          ",
+    ),
+)
+
+BUMP_SPRITE = (
+    "  ██  ██  ",
+    "   ████   ",
+    "    ██    ",
+    "   ████   ",
+    "  ██  ██  ",
+)
+
+DEATH_SPRITE = (
+    " ██    ██ ",
+    "  ██  ██  ",
+    "   ████   ",
+    "  ██  ██  ",
+    " ██    ██ ",
+)
+
+GOLD_BURST_SPRITES = (
+    (
+        " *  ██  * ",
+        "   ████   ",
+        "* ██████ *",
+        "   ████   ",
+        " *  ██  * ",
+    ),
+    (
+        "  +    +  ",
+        "    ██    ",
+        "+  ████  +",
+        "    ██    ",
+        "  +    +  ",
+    ),
+    (
+        "    ·     ",
+        "          ",
+        "·        ·",
+        "          ",
+        "     ·    ",
+    ),
+)
+
+GLITCH_SPRITES = (
+    (
+        "▒▒  ▒▒  ▒▒",
+        "  ▒▒  ▒▒  ",
+        "▒▒  ▒▒  ▒▒",
+        "  ▒▒  ▒▒  ",
+        "▒▒  ▒▒  ▒▒",
+    ),
+    (
+        "  ░░  ░░  ",
+        "░░  ░░  ░░",
+        "  ░░  ░░  ",
+        "░░  ░░  ░░",
+        "  ░░  ░░  ",
+    ),
+)
+
+
 def tile_lines(
     kind: TileKind, direction: Direction | None = None
 ) -> tuple[str, ...]:
@@ -204,3 +324,9 @@ def tile_style(kind: TileKind) -> str:
     """Return the Rich style that communicates this tile's meaning."""
 
     return TILE_STYLES[kind]
+
+
+def legend_icon(kind: TileKind) -> tuple[str, ...]:
+    """Return the miniature of a tile's own sprite, for the legend."""
+
+    return _LEGEND_SPRITES[kind]
