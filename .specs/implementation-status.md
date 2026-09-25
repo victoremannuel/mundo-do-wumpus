@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 20 — E2E (`VERIFIED`)
+FASE 21 — README final (`VERIFIED`)
 
 ## Phase ledger
 
@@ -41,7 +41,7 @@ rename, merge, or reorder phases.
 | FASE 18 — CLI | `VERIFIED` | `7 passed` targeted; `240 passed` full; `compileall` passed; deterministic seed replay, `--debug`/`--step`/`--no-delay` manual smoke checks passed; specification audit `COMPLIANT`. |
 | FASE 19 — Integration tests | `VERIFIED` | `2 passed` targeted; `4 passed` integration/determinism/antitrapaça; `242 passed` full; `compileall` passed; independent specification and test audits `COMPLIANT`/`PASS`. |
 | FASE 20 — E2E | `VERIFIED` | `10 passed` targeted; `14 passed` affected; `252 passed` full; 100-seed stress completed without exceptions; independent specification/test audits `COMPLIANT`/`PASS`. |
-| FASE 21 — README final | `NOT_STARTED` | — |
+| FASE 21 — README final | `VERIFIED` | `2 passed` README contract tests; full regression `291 passed` (run in three bounded groups); `compileall` passed; specification audit `COMPLIANT`. |
 
 ## Current checkpoint
 
@@ -49,28 +49,21 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 20 — E2E.
-- Completed acceptance criteria: Added a fixed-seed E2E matrix using the plan's
-  ten example seeds (`1`, `2`, `3`, `10`, `20`, `42`, `100`, `123`, `999`,
-  `2026`). Every case constructs the production procedural map, real `World`,
-  unmodified `SimpleAgent`, and `GameEngine`; runs to a bounded terminal
-  `GameStatus`; then replays from the same seed and compares the complete
-  `GameOutcome` for determinism.
-- Remaining acceptance criteria: None for FASE 20.
-- Last verified commands: `.venv/bin/python -m pytest
-  tests/e2e/test_seeded_games.py -q`; `.venv/bin/python -m pytest
-  tests/e2e/test_seeded_games.py tests/integration/test_known_maps.py
-  tests/unit/test_simple_agent.py::test_agent_package_never_imports_the_environment_or_hidden_map_types
-  tests/unit/test_engine.py::test_seeded_games_with_the_simple_agent_are_reproducible
-  -q`; 100-seed generated-map stress script; `.venv/bin/python -m pytest -q`;
-  `.venv/bin/python -m compileall -q src main.py`; `git diff --check`.
-- Result: targeted `10 passed`; E2E/integration/determinism/antitrapaça
-  `14 passed`; full suite `252 passed` (up from 242); compilation exited 0.
-  The 100-seed stress run completed without exceptions or invalid-state
-  assertions: 84 `ESCAPED`, 12 `DEAD`, 4 `TURN_LIMIT`, maximum 2000 turns.
-  Ruff remains unconfigured/not installed. Independent specification review
-  was `COMPLIANT`, and independent test review was `PASS`; neither found a
-  blocker to verification.
+- Last completed phase: FASE 21 — README final.
+- Completed acceptance criteria: README documents the academic objective, game
+  rules, architecture and anti-cheat boundary, inference/strategy, map
+  generation, PEAS, execution and debug modes, tests, reproducible examples,
+  limitations, and source layout. It reflects the current persistent Textual
+  interface and retains the legacy console invocation.
+- Remaining acceptance criteria: None.
+- Last verified commands: `.venv/bin/python -m pytest tests/test_readme.py -q`;
+  regression split into 220 non-TUI unit tests, 50 scaffold/console/debug/CLI/
+  integration/E2E tests, and 21 TUI tests; `.venv/bin/python -m compileall -q
+  src main.py`; `git diff --check`.
+- Result: targeted `2 passed`; complete regression `291 passed` with zero
+  failures (220 + 50 + 21); compilation exited 0; diff check clean. Ruff
+  remains unconfigured/not installed. Documentation/specification audit was
+  `COMPLIANT` for FASE 21, with no unresolved documentation finding.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -78,25 +71,28 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `tests/e2e/test_seeded_games.py` (new)
+- `README.md`
+- `tests/test_readme.py` (new)
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Sections 104 and 119, FASE 20: all ten fixed seeds execute the production
-  autonomous stack to a bounded terminal status without exceptions.
-- Sections 8, 105, and 126: every seed is replayed with injected RNG state;
-  complete outcomes match and every run ends in at most `MAX_TURNS` (2000).
-- Sections 124 and 137: the E2E matrix detects uncaught errors or unbounded
-  execution, while the complete pytest suite remains green with zero failures.
-- Section 138: a separate 100-seed stress run completed without crashes or
-  invalid-state assertions; victory in every map was intentionally not
-  required.
+- Sections 110–118 and 119 FASE 21: final documentation covers every listed
+  README topic and accurately classifies the agent/environment.
+- Sections 72–73 and 114: documented execution modes, debug isolation, and
+  fixed-seed reproducibility match `main.py` and the current TUI.
+- Sections 120–121: README contract tests, full regression, compilation, and
+  diff check passed.
 
 ## Current blockers
 
-- None.
+- Final-project audit is `BLOCKERS`: plan sections 106–108 still lack explicit
+  cycle detection, a knowledge-revision-driven replanning trigger, and
+  temporary objective blacklisting; section 109's exploration-rate metric and
+  section 78's complete final summary are also absent. All numbered phases,
+  including FASE 21, are verified, but the project Definition of Done cannot
+  be claimed until these plan requirements have executable evidence.
 
 ## Known limitations and technical debt
 
@@ -135,11 +131,9 @@ rename, merge, or reorder phases.
 
 ## Next action
 
-Begin FASE 21 — README final (unchanged by the UI-RETRO-TUI-001 maintenance
-recorded below): document the plan-required architecture,
-behavior, PEAS model, execution modes, tests, examples, and limitations. Do
-not alter production behavior unless the documentation audit exposes a real
-defect.
+Resolve the final-audit blockers for sections 78 and 106–109 with explicit
+scope authorization (they are not a numbered phase), then add traceability and
+repeat the final audit. Do not declare the repository release-ready yet.
 
 ## Post-FASE-20 maintenance
 
@@ -254,6 +248,19 @@ suite, and specification compliance all pass. Commit the state file in the same
 checkpoint as the implementation it describes.
 
 ## Last update
+
+2026-09-25 — FASE 21 — README final verified: replaced the scaffold README
+with plan-required academic, rules, architecture, algorithm, knowledge,
+inference, strategy, generation, PEAS, execution, debug, test, example, and
+limitation documentation. Added two contract tests. Targeted `2 passed`; full
+regression `291 passed` (220 + 50 + 21 in bounded groups); compilation and
+`git diff --check` passed; specification audit `COMPLIANT`.
+
+2026-09-25 — Final-project audit: `BLOCKERS`. Full suite `291 passed`,
+compilation, deterministic legacy release/debug seed-42 smoke runs, and the
+prior 100-seed stress evidence passed; however, sections 78 and 106–109 are
+still unimplemented and have no traceability evidence. This does not reopen
+FASE 21, but prevents an overall Definition-of-Done claim.
 
 2026-09-25 — UI-RETRO-TUI-001 (post-FASE-20 maintenance): added the persistent
 retro Textual interface as the default front end while keeping `run()` headless
