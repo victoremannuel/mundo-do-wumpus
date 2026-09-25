@@ -12,7 +12,7 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 11 — Planner (`VERIFIED`)
+FASE 12 — Strategy (`VERIFIED`)
 
 ## Phase ledger
 
@@ -32,7 +32,7 @@ rename, merge, or reorder phases.
 | FASE 9 — Knowledge Base | `VERIFIED` | `14 passed` targeted; `45 passed` affected; `130 passed` full; `compileall` passed; independent audit `COMPLIANT`. |
 | FASE 10 — Inference Engine | `VERIFIED` | `18 passed` targeted; `64 passed` affected; `149 passed` full; `compileall`, determinism, and anti-cheat checks passed; independent logic/specification audits `COMPLIANT`. |
 | FASE 11 — Planner | `VERIFIED` | `10 passed` targeted; `18 passed` affected (`test_simple_agent.py`); `159 passed` full; `compileall` passed; specification and logic audits `COMPLIANT`. |
-| FASE 12 — Strategy | `NOT_STARTED` | — |
+| FASE 12 — Strategy | `VERIFIED` | `11 passed` targeted; `44 passed` affected; `170 passed` full; `compileall` passed; 80-seed real-map stress run with no crash; independent specification and logic audits `COMPLIANT` after a confirmed reachability bug was fixed. |
 | FASE 13 — Wumpus hunting | `NOT_STARTED` | — |
 | FASE 14 — Risk engine | `NOT_STARTED` | — |
 | FASE 15 — Política de saída | `NOT_STARTED` | — |
@@ -49,26 +49,40 @@ rename, merge, or reorder phases.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
-- Last completed phase: FASE 11 — Planner.
-- Completed acceptance criteria: Implemented isolated BFS restricted to
-  agent-owned `safe` knowledge, shortest-path reconstruction, the no-path
-  result for isolated goals, and route-to-action conversion (turns plus
-  `MOVE_FORWARD`) matching the plan's worked example, returned as a
-  `deque[Action]`.
-- Remaining acceptance criteria: None for FASE 11. Plan invalidation on new
-  critical information (section 52) and teleport-triggered replanning
-  (section 53) are integration behaviors intentionally deferred to the
-  engine/strategy wiring in later phases; FASE 11 exposes the planner as a
-  pure function only.
+- Last completed phase: FASE 12 — Strategy.
+- Completed acceptance criteria: Implemented the priority-1-to-4 decision
+  hierarchy (grab gold, climb/return once no safe frontier remains while
+  carrying gold, otherwise route to the nearest reachable unvisited safe
+  cell), wired `find_path`/`plan_actions` into `SimpleAgent` through a
+  persisted `deque[Action]` plan cache that survives across turns and is
+  invalidated only by a position/expected-path mismatch (covers bumps and
+  bat teleports without special-casing either), and a reachability-aware
+  target search that tries unexplored candidates nearest-first instead of
+  giving up on the first (possibly disconnected) pick.
+- Remaining acceptance criteria: None for FASE 12. Priority 5 (shooting a
+  confirmed Wumpus) requires FASE 13's alignment/firing mechanics; priorities
+  6-7 (least-risk fallback, forced return under excessive risk) require
+  FASE 14's Risk engine. `Strategy.decide` returns `None` when no priority in
+  this phase applies, and `SimpleAgent` keeps its pre-existing bounded random
+  fallback for that case, documented below.
 - Last verified commands: `.venv/bin/python -m pytest
-  tests/unit/test_planner.py -q`; `.venv/bin/python -m pytest
-  tests/unit/test_planner.py tests/unit/test_simple_agent.py -q`;
-  `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `10 passed`; affected tests `18 passed`; full suite
-  `159 passed`; compilation exit 0. Independent logic review confirmed
-  shortest-path correctness, determinism, safe-cell boundary enforcement, and
-  turn-count logic with no bugs. Independent specification review confirmed
-  `COMPLIANT` after this checkpoint records the phase in the state files.
+  tests/unit/test_strategy.py -q`; `.venv/bin/python -m pytest
+  tests/unit/test_strategy.py tests/unit/test_simple_agent.py
+  tests/unit/test_planner.py tests/unit/test_engine.py -q`;
+  `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`;
+  an 80-seed stress sweep over the real `MapGenerator`/`World`/`GameEngine`
+  loop checking for exceptions or hangs.
+- Result: Targeted tests `11 passed`; affected tests `44 passed`; full suite
+  `170 passed`; compilation exit 0; 80-seed stress run completed every game
+  (53 `ESCAPED`, 27 `DEAD` — deaths are expected since risk avoidance and
+  Wumpus hunting are still deferred) with no crash or hang. Independent logic
+  review found one CONFIRMED bug (nearest-by-raw-distance target selection
+  had no reachability check, so an unreachable-but-nearer safe cell — e.g.
+  across a bat-teleport gap — could permanently starve exploration); fixed by
+  trying candidates nearest-first with a `find_path` reachability check per
+  candidate, with a regression test added. Independent specification review
+  confirmed `COMPLIANT` after this checkpoint records the phase in the state
+  files.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -76,24 +90,43 @@ rename, merge, or reorder phases.
 
 ## Files changed in current phase
 
-- `src/wumpus/agent/planner.py`
+- `src/wumpus/agent/strategy.py`
+- `src/wumpus/agent/simple_agent.py`
 - `src/wumpus/agent/__init__.py`
-- `tests/unit/test_planner.py`
+- `tests/unit/test_strategy.py`
+- `tests/unit/test_simple_agent.py`
+- `tests/unit/test_memory.py`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Section 49: BFS route planning restricted to cells classified `safe`,
-  avoiding hazards and unknown cells by construction.
-- Section 50: exact position/direction-to-action conversion reproducing the
-  plan's worked example (`TURN_RIGHT`, `MOVE_FORWARD`).
-- Section 51: the converted route is a `deque[Action]`.
-- Section 99: shortest path, hazard avoidance, unknown-cell avoidance, and
-  the no-path case for an isolated goal are each covered by a dedicated test.
-- Sections 57–59: `planner.py` imports only `wumpus.agent.knowledge` and
-  `wumpus.domain`; it never imports `wumpus.environment` or references
-  hidden map/World state, verified by the existing AST boundary test.
+- Section 44 priorities 1-4: `Strategy.decide` checks glitter (GRAB), then
+  the literal section 45 exit condition (gold and no safe frontier: CLIMB at
+  start, otherwise route toward it), then routes to the nearest reachable
+  unvisited safe cell.
+- Section 45 (minimal literal exit condition only): `collected_gold > 0 and
+  not unexplored`, without inventing the fuller multi-factor utility policy
+  section 45/46 describe as optional and out of this phase's scope.
+- Sections 51-52: the FASE 11 `deque[Action]` plan is cached across
+  `decide()` calls and consumed one action per cycle; it is discarded and
+  recomputed when the observed position no longer matches the plan's
+  expected current cell (covers unexpected bumps and bat teleports) or when
+  the pursued target is no longer a valid candidate.
+- Section 99/49 corollary: candidate targets are only ever cells in
+  `knowledge.safe`, and unreachable candidates (safe but not yet connected
+  through other safe cells) are skipped in favor of the next-nearest
+  reachable one rather than stalling the agent.
+- Section 100: `test_strategy_grabs_gold_regardless_of_the_safe_frontier`
+  confirms GRAB fires independently of frontier state.
+- Section 101: `test_strategy_heads_toward_the_start_with_gold_and_no_safe_frontier`
+  and `SimpleAgent`'s existing exit-position test confirm the agent routes
+  toward `[1,1]` when carrying gold with no safe frontier left, elsewhere.
+- Sections 57–59: `strategy.py` imports only `wumpus.agent.knowledge`,
+  `wumpus.agent.planner`, `wumpus.domain`, and `wumpus.game.config`; it never
+  imports `wumpus.environment` or references hidden map/World state,
+  verified by the existing AST boundary test (now covering `strategy.py`
+  automatically).
 
 ## Current blockers
 
@@ -102,13 +135,17 @@ rename, merge, or reorder phases.
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- `find_path`/`plan_actions` are pure functions not yet wired into
-  `SimpleAgent`; integration with strategy/decision-making is deferred to
-  FASE 12 — Strategy.
-- Plan invalidation on new critical information (section 52) and teleport
-  replanning (section 53) are not implemented; they belong to the engine/
-  strategy integration once the planner is wired into the agent's decision
-  loop.
+- Priority 5 (shoot a confirmed Wumpus blocking a useful route) is not
+  implemented; it requires FASE 13's alignment and firing mechanics.
+- Priorities 6-7 (least-risk fallback, forced return under excessive risk)
+  are not implemented; they require FASE 14's Risk engine. Until then,
+  `SimpleAgent` falls back to bounded random movement whenever `Strategy`
+  finds no known-safe target, which can lead to death on generated maps with
+  hazards — expected and out of this phase's scope.
+- Section 45/46's fuller utility-based exit policy (probabilistic cost model,
+  risk tolerance before/after gold) is deferred to FASE 15 — Política de
+  saída; FASE 12 implements only the literal minimal exit condition the plan
+  gives as a FASE-12 test case (section 101).
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
@@ -122,10 +159,11 @@ rename, merge, or reorder phases.
 
 ## Next action
 
-Begin FASE 12 — Strategy by implementing the decision hierarchy that consumes
-`KnowledgeBase`, `InferenceEngine`, and the FASE 11 planner to choose actions,
-wiring `find_path`/`plan_actions` into the agent's decision loop with plan
-invalidation on new critical information.
+Begin FASE 13 — Wumpus hunting by implementing confirmation-driven alignment,
+firing, and replanning: when a confirmed Wumpus blocks the only useful route,
+align toward it, SHOOT, and reconcile historical stench constraints plus the
+existing dead-Wumpus knowledge transition after a scream/kill, feeding the
+result back into `Strategy`'s priority 5.
 
 ## Checkpoint update contract
 
@@ -147,7 +185,8 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 11 — Planner verified: isolated BFS over agent-owned safe
-knowledge, route-to-action conversion, targeted/affected/full tests,
-compilation, and independent logic/specification reviews with no confirmed
-defects.
+2026-09-24 — FASE 12 — Strategy verified: priority 1-4 decision hierarchy
+wired into `SimpleAgent` via the FASE 11 planner, targeted/affected/full
+tests, compilation, an 80-seed real-map stress run, and independent logic/
+specification reviews after fixing a confirmed reachability bug in target
+selection.

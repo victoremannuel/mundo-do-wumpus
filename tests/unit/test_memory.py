@@ -214,12 +214,21 @@ def test_simple_agent_memory_is_updated_by_the_real_game_loop() -> None:
 
     outcome = GameEngine(world, agent).run()
 
+    all_cells = frozenset(
+        Position(row, col) for row in range(1, 7) for col in range(1, 7)
+    )
+
+    # With no hazard anywhere, every cell becomes known safe; FASE 12's
+    # strategy (priority 3/4) explores the whole board before the exit
+    # condition (priority 2: gold with no safe frontier left) fires CLIMB.
     assert outcome.status is GameStatus.ESCAPED
-    assert agent.memory.visited == frozenset({Position(1, 1)})
-    assert agent.memory.path == (Position(1, 1),)
-    assert agent.memory.actions == (Action.GRAB, Action.CLIMB)
+    assert agent.memory.visited == all_cells
+    assert agent.memory.path[0] == Position(1, 1)
+    assert agent.memory.path[-1] == Position(1, 1)
+    assert agent.memory.actions[0] is Action.GRAB
+    assert agent.memory.actions[-1] is Action.CLIMB
     assert agent.memory.collected_gold == 1
-    assert agent.memory.score == 998
+    assert agent.memory.score == 946
     assert agent.memory.gold_seen == frozenset({Position(1, 1)})
 
 
