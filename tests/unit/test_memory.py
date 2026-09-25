@@ -221,3 +221,15 @@ def test_simple_agent_memory_is_updated_by_the_real_game_loop() -> None:
     assert agent.memory.collected_gold == 1
     assert agent.memory.score == 998
     assert agent.memory.gold_seen == frozenset({Position(1, 1)})
+
+
+def test_simple_agent_inference_updates_knowledge_from_reduced_observations() -> None:
+    agent = SimpleAgent(random.Random(0))
+
+    agent.decide(observation(Position(1, 1)))
+
+    neighbors = frozenset({Position(1, 2), Position(2, 1)})
+    assert neighbors.issubset(agent.memory.knowledge.safe)
+    assert neighbors.issubset(agent.memory.knowledge.not_pit)
+    assert neighbors.issubset(agent.memory.knowledge.not_wumpus)
+    assert neighbors.issubset(agent.memory.knowledge.not_bat)

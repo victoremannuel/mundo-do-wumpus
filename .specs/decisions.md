@@ -60,6 +60,42 @@ Evidence:
 Sections 5, 57, and 58; `src/wumpus/game/config.py`;
 `tests/unit/test_simple_agent.py::test_agent_module_never_references_the_environment`.
 
+## DEC-003 — Intersection inference with multiple hazards
+
+Date: 2026-09-24
+Status: PROPOSED
+Affected phase(s): FASE 10 — Inference Engine
+
+Context:
+Section 37 requires a singleton intersection between two positive perception
+neighborhoods to confirm a hazard. Sections 7 and 74 configure multiple pits,
+Wumpus, and bats. With multiplicity greater than one, two positive signals can
+be satisfied by different hazards outside their singleton intersection, so the
+required confirmation is not logically valid in every permitted world.
+
+Decision:
+User decision required. The recommended multiplicity-aware interpretation is
+to retain each positive perception as an existential candidate constraint and
+confirm only when that individual constraint has one unresolved candidate.
+The alternative is to implement section 37 literally, accepting possible false
+confirmations in worlds with multiple hazards of the same type.
+
+Reason:
+The production logical agent must not assert knowledge that does not follow
+from its observations. Neither instruction precedence nor existing accepted
+decisions resolve the conflict between the literal intersection rule and the
+configured hazard multiplicity.
+
+Consequences:
+FASE 10 remains `BLOCKED`. Absence, presence, elimination, safety, bounded
+fixed-point processing, functional events, and fail-closed contradiction
+handling can be implemented and tested, but intersection behavior and the
+phase gate require an explicit requirement decision.
+
+Evidence:
+Sections 7, 34–38, 74, and 119 FASE 10; independent FASE 10 logic and
+specification reviews; `tests/unit/test_inference.py`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

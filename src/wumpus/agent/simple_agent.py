@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 
+from wumpus.agent.inference import InferenceEngine
 from wumpus.agent.knowledge import KnowledgeBase
 from wumpus.agent.memory import AgentMemory
 from wumpus.domain import Action, ActionResult, AgentObservation
@@ -35,10 +36,15 @@ class SimpleAgent:
             START_DIRECTION,
             KnowledgeBase(game_config.rows, game_config.cols),
         )
+        self._inference = InferenceEngine(self._memory.knowledge)
 
     @property
     def memory(self) -> AgentMemory:
         return self._memory
+
+    @property
+    def inference(self) -> InferenceEngine:
+        return self._inference
 
     @property
     def actions_taken(self) -> int:
@@ -48,6 +54,7 @@ class SimpleAgent:
         """Return the next action using only the received observation."""
 
         self._memory.record_observation(observation)
+        self._inference.observe(observation.position, observation.perception)
         if observation.perception.glitter:
             return Action.GRAB
         if observation.collected_gold > 0 and observation.position == START_POSITION:
@@ -60,4 +67,6 @@ class SimpleAgent:
         """Update the minimal internal state derived from the last result."""
 
         self._memory.record_result(result)
+        if not result.died:
+            self._inference.observe(result.position, result.perception)
         self._blocked = result.perception.bump

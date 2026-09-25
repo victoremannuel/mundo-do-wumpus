@@ -5,14 +5,14 @@ This file records execution state only. Requirements remain in
 
 ## Overall status
 
-`IN_PROGRESS`
+`BLOCKED`
 
 Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 `VERIFIED`.
 
 ## Current phase
 
-FASE 10 — Inference Engine (`NOT_STARTED`)
+FASE 10 — Inference Engine (`BLOCKED`)
 
 ## Phase ledger
 
@@ -30,7 +30,7 @@ rename, merge, or reorder phases.
 | FASE 7 — Engine | `VERIFIED` | `24 passed` targeted; `109 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 8 — Memory | `VERIFIED` | `7 passed` targeted; `31 passed` affected; `116 passed` full; `compileall` passed; audit `COMPLIANT`. |
 | FASE 9 — Knowledge Base | `VERIFIED` | `14 passed` targeted; `45 passed` affected; `130 passed` full; `compileall` passed; independent audit `COMPLIANT`. |
-| FASE 10 — Inference Engine | `NOT_STARTED` | — |
+| FASE 10 — Inference Engine | `BLOCKED` | Noncontroversial inference: `12 passed` targeted, `58 passed` affected, `143 passed` full, and `compileall` passed; independent reviews found section 37 unsound with configured hazard multiplicity. |
 | FASE 11 — Planner | `NOT_STARTED` | — |
 | FASE 12 — Strategy | `NOT_STARTED` | — |
 | FASE 13 — Wumpus hunting | `NOT_STARTED` | — |
@@ -45,26 +45,30 @@ rename, merge, or reorder phases.
 
 ## Current checkpoint
 
-- Checkpoint type: `VERIFIED`.
+- Checkpoint type: `BLOCKED`.
 - Checkpoint commit: Not recorded. When committed, resolve the authoritative
   hash with `git log -1 --format=%H` rather than attempting to store a commit's
   own hash inside itself.
 - Last completed phase: FASE 9 — Knowledge Base.
-- Completed acceptance criteria: Added the independent 6×6 logical map with
-  visited, safe, unknown, exploration frontier, possible and confirmed hazards,
-  explicit negative knowledge, immutable `KnownCell` snapshots, monotonic
-  conflict-checked transitions, dead-Wumpus state, and `knowledge_revision`.
-- Remaining acceptance criteria: None for FASE 9. Sensor rules, intersection,
-  elimination, and fixed-point inference remain intentionally assigned to FASE 10.
+- Completed acceptance criteria: Implemented absence rules for all three hazard
+  signals, typed candidates for positive signals, singleton elimination,
+  derived safety, bounded fixed-point processing, idempotent functional events,
+  fail-closed inconsistent-evidence handling, and integration through reduced
+  observations only.
+- Remaining acceptance criteria: Resolve and implement section 37 intersection
+  semantics, add the selected intersection evidence, and repeat the critical
+  logic/specification gate before FASE 10 can be `VERIFIED`.
 - Last verified commands: `.venv/bin/python -m pytest
-  tests/unit/test_knowledge.py -q`; `.venv/bin/python -m pytest
-  tests/unit/test_knowledge.py tests/unit/test_memory.py
-  tests/unit/test_simple_agent.py tests/unit/test_engine.py -q`;
+  tests/unit/test_inference.py -q`; `.venv/bin/python -m pytest
+  tests/unit/test_inference.py tests/unit/test_knowledge.py
+  tests/unit/test_memory.py tests/unit/test_simple_agent.py
+  tests/unit/test_engine.py -q`;
   `.venv/bin/python -m pytest -q`; `.venv/bin/python -m compileall -q src`.
-- Result: Targeted tests `14 passed`; affected tests `45 passed`; full suite
-  `130 passed`; compilation exit 0; verification `PASS`; independent logic and
-  specification reviews `COMPLIANT` after adding the required dead-Wumpus
-  transition.
+- Result: Targeted tests `12 passed`; affected tests `58 passed`; full suite
+  `143 passed`; compilation exit 0. Automated verification passed for the
+  implemented subset. Independent logic and specification reviews are
+  `NON_COMPLIANT` because the literal singleton-intersection rule is unsound
+  when a valid world contains multiple hazards of the same type.
 - Expected post-checkpoint worktree: Clean for task-owned files.
 - Working tree notes: `__pycache__` directories remain untracked and are never
   staged. The canonical specification files stay in the ignored `.specs`
@@ -73,38 +77,39 @@ rename, merge, or reorder phases.
 ## Files changed in current phase
 
 - `src/wumpus/agent/__init__.py`
-- `src/wumpus/agent/knowledge.py`
-- `src/wumpus/agent/memory.py`
+- `src/wumpus/agent/inference.py`
 - `src/wumpus/agent/simple_agent.py`
-- `tests/unit/test_knowledge.py`
+- `tests/unit/test_inference.py`
 - `tests/unit/test_memory.py`
+- `.specs/decisions.md`
 - `.specs/implementation-status.md`
 - `.specs/traceability.md`
 
 ## Requirements satisfied in current phase
 
-- Sections 32–33 and 39: the base separates every hazard type, explicit
-  negatives, and safe cells that exclude all three hazards.
-- Sections 31, 41, and 129: `AgentMemory` owns an independent logical map with
-  visited/unknown classifications, bounded frontier, and immutable cell views.
-- Sections 107 and 131–133: relevant changes increment a revision exactly once,
-  repetition is idempotent, contradictions fail closed, dead Wumpus transition
-  out of confirmed state, and confirmed bats remain hazardous.
-- Sections 57–59, 119 FASE 9, and 123–124: the base is integrated only through
-  observable memory facts and has no environment or hidden-map dependency.
+- Sections 34–36, 38–40, and 96–98: absence creates negative and safe
+  knowledge, presence creates typed candidates, and elimination confirms the
+  only unresolved candidate for pits, Wumpus, and bats.
+- Sections 127 and 130–131: inference repeats to a bounded fixed point, remains
+  idempotent, and records functional events only for effective changes.
+- Sections 57–59 and 123–124: `SimpleAgent` feeds inference exclusively from
+  reduced `AgentObservation` and non-lethal `ActionResult` values.
+- Inconsistent positive evidence with no compatible candidate fails closed
+  rather than being silently accepted.
 
 ## Current blockers
 
-- None.
+- `DEC-003`: section 37 mandates confirmation from a singleton intersection,
+  but sections 7 and 74 allow multiple hazards of each type. Two positive
+  perceptions can therefore be caused by distinct hazards outside the common
+  cell, making literal confirmation logically unsound. User direction is
+  required to choose multiplicity-aware inference or literal section 37.
 
 ## Known limitations and technical debt
 
 - Ruff is not configured or installed, and its use is optional in section 121.
-- `SimpleAgent` remains intentionally non-intelligent; it now has episodic
-  memory and a logical knowledge store but no inference, planning, or risk
-  evaluation.
-- The negative-perception scenario in section 96 is not automatic yet; applying
-  sensor rules belongs to FASE 10 rather than the FASE 9 storage model.
+- `SimpleAgent` now has inference but remains intentionally without planning,
+  strategy, hunting, or risk evaluation from later phases.
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
@@ -116,9 +121,10 @@ rename, merge, or reorder phases.
 
 ## Next action
 
-Begin FASE 10 — Inference Engine by applying negative/presence sensor rules,
-candidate intersections, elimination, confirmation, safety, and bounded
-fixed-point updates over the verified Knowledge Base.
+Obtain the user's decision for `DEC-003`. Recommended: use multiplicity-aware
+existential constraints and do not confirm a singleton intersection unless one
+individual positive constraint has only that unresolved candidate. Then add
+the chosen tests, rerun verification, and repeat independent critical review.
 
 ## Checkpoint update contract
 
@@ -140,6 +146,6 @@ checkpoint as the implementation it describes.
 
 ## Last update
 
-2026-09-24 — FASE 9 — Knowledge Base verified after focused and affected tests,
-full regression, source compilation, anti-cheat verification, and independent
-critical-phase logic/specification reviews.
+2026-09-24 — FASE 10 — Inference Engine checkpointed as `BLOCKED` after its
+noncontroversial subset passed focused, affected, full, and compilation checks;
+independent critical reviews identified unresolved intersection semantics.
