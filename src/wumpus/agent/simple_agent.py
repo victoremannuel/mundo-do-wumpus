@@ -67,6 +67,12 @@ class SimpleAgent:
     def last_reason(self) -> DecisionReason | None:
         return self._strategy.last_reason
 
+    @property
+    def abandoned(self) -> bool:
+        """Expose a bounded rational stop to the game loop."""
+
+        return self._strategy.abandoned
+
     def decide(self, observation: AgentObservation) -> Action:
         """Return the next action using only the received observation."""
 
@@ -80,6 +86,7 @@ class SimpleAgent:
             collected_gold=observation.collected_gold,
             glitter=observation.perception.glitter,
         )
+        self._memory.begin_action(self._strategy.current_target)
         return action
 
     def process_result(self, result: ActionResult) -> None:
@@ -93,3 +100,6 @@ class SimpleAgent:
             self._strategy.confirm_kill(self._memory.knowledge, result)
         if not result.died:
             self._inference.observe(result.position, result.perception)
+        stagnation = self._memory.finish_action(result)
+        if stagnation is not None:
+            self._strategy.recover_from_stagnation(stagnation)

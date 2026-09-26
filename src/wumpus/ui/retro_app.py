@@ -495,7 +495,9 @@ class GameScreen(Screen[None]):
         for timer in (self._game_timer, self._animation_timer):
             if timer is not None:
                 timer.stop()
-        self.app.return_to_setup(self.session.settings)  # type: ignore[attr-defined]
+        self.app.return_to_setup(
+            self.session.next_settings or self.session.settings
+        )  # type: ignore[attr-defined]
 
     def action_quit_game(self) -> None:
         self.app.exit(self._outcome)
@@ -573,7 +575,9 @@ class RetroGameApp(App[GameOutcome | None]):
         self._game_screen = None
         self.switch_screen(SetupScreen(seed=settings.seed, config=settings.config,
                                        mode=settings.mode,
-                                       objective=settings.objective))
+                                       objective=settings.objective,
+                                       restart_index=settings.restart_index,
+                                       previous_layout=settings.previous_layout))
 
     def action_quit_application(self) -> None:
         outcome = self._game_screen.outcome if self._game_screen is not None else None

@@ -28,7 +28,7 @@ from wumpus.game.objective import GameObjective
 from wumpus.game.scoring import DEATH_PENALTY, GOLD_REWARD, action_cost
 
 
-INVALID_CLIMB_EVENT = "A saída é automática somente na célula final."
+INVALID_CLIMB_EVENT = "Tentativa inválida de saída."
 EXIT_BLOCKED_EVENT = "SAÍDA BLOQUEADA"
 
 
@@ -216,7 +216,7 @@ class World:
         elif action is Action.SHOOT:
             wumpus_killed = self._shoot()
         elif action is Action.CLIMB:
-            self._climb()
+            exit_blocked = self._climb()
         else:
             raise ValueError(f"Unsupported action: {action}")
 
@@ -278,13 +278,6 @@ class World:
             self._game_over = True
             return False
 
-        if self._agent_position == self._exit_position:
-            if self._exit_requirement_satisfied():
-                self._escaped = True
-                self._game_over = True
-            else:
-                self._last_event = EXIT_BLOCKED_EVENT
-                return True
         return False
 
     def _exit_requirement_satisfied(self) -> bool:
@@ -320,5 +313,13 @@ class World:
 
         return False
 
-    def _climb(self) -> None:
-        self._last_event = INVALID_CLIMB_EVENT
+    def _climb(self) -> bool:
+        if self._agent_position != self._exit_position:
+            self._last_event = INVALID_CLIMB_EVENT
+            return False
+        if self._exit_requirement_satisfied():
+            self._escaped = True
+            self._game_over = True
+            return False
+        self._last_event = EXIT_BLOCKED_EVENT
+        return True

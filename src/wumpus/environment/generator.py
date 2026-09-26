@@ -24,11 +24,13 @@ __all__ = (
     "GeneratedMap",
     "MapGenerationError",
     "MapGenerator",
+    "layout_signature",
+    "is_world_solvable",
     "is_winnable",
 )
 
 
-MAX_GENERATION_ATTEMPTS = 256
+MAX_GENERATION_ATTEMPTS = 500
 _BLOCKING_ENTITIES = frozenset({EntityType.PIT, EntityType.WUMPUS, EntityType.BAT})
 
 
@@ -59,15 +61,25 @@ class GeneratedMap:
         return self.entities.get(position, EntityType.EMPTY)
 
 
-def is_winnable(
-    generated_map: GeneratedMap,
-    objective: GameObjective,
-    config: GameConfig,
-) -> bool:
-    """Return whether the selected objective has a hazard-free physical route."""
+def layout_signature(generated_map: GeneratedMap) -> tuple[tuple[int, int, str], ...]:
+    """Return a deterministic private fingerprint for immediate-repeat checks."""
+
+    return tuple(
+        sorted(
+            (position.row, position.col, entity.name)
+            for position, entity in generated_map.entities.items()
+        )
+    )
+
+
+def is_world_solvable(generated_map: GeneratedMap) -> bool:
+    """Return whether a gold is reachable from start without a live hazard.
+
+    This is generator-only validation.  It intentionally receives a hidden
+    map and is never imported by the logical agent.
+    """
 
     start = START_POSITION
-    exit_position = config.exit_position
     if not start.is_inside(generated_map.rows, generated_map.cols):
         return False
     reachable = {start}
@@ -88,17 +100,21 @@ def is_winnable(
                 continue
             reachable.add(candidate)
             pending.append(candidate)
-    if exit_position not in reachable:
-        return False
-    if objective is GameObjective.ESCAPE_FAST:
-        return True
-    if objective is GameObjective.COLLECT_ALL_GOLD:
-        return all(
-            position in reachable
-            for position, entity in generated_map.entities.items()
-            if entity is EntityType.GOLD
-        )
-    raise AssertionError(f"Unsupported game objective: {objective!r}")
+    return any(
+        entity is EntityType.GOLD and position in reachable
+        for position, entity in generated_map.entities.items()
+    )
+
+
+def is_winnable(
+    generated_map: GeneratedMap,
+    objective: GameObjective,
+    config: GameConfig,
+) -> bool:
+    """Backward-compatible objective signature for the universal rule."""
+
+    del objective, config
+    return is_world_solvable(generated_map)
 
 
 class MapGenerator:
@@ -110,10 +126,12 @@ class MapGenerator:
         config: GameConfig | None = None,
         *,
         objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,
+        previous_layout: tuple[tuple[int, int, str], ...] | None = None,
     ) -> None:
         self._rng = rng
         self._config = config if config is not None else GameConfig()
         self._objective = objective
+        self._previous_layout = previous_layout
 
     def generate(self) -> GeneratedMap:
         """Generate one map and validate every structural invariant."""
@@ -122,12 +140,20 @@ class MapGenerator:
         self._validate_winnability_capacity()
         for _ in range(MAX_GENERATION_ATTEMPTS):
             generated_map = self._candidate(available)
-            if is_winnable(generated_map, self._objective, self._config):
+            if (
+                layout_signature(generated_map) != self._previous_layout
+                and is_winnable(generated_map, self._objective, self._config)
+            ):
                 self._validate(generated_map)
                 return generated_map
-        generated_map = self._construct_winnable_map(available)
-        self._validate(generated_map)
-        return generated_map
+        for _ in range(MAX_GENERATION_ATTEMPTS):
+            generated_map = self._construct_winnable_map(available)
+            if layout_signature(generated_map) != self._previous_layout:
+                self._validate(generated_map)
+                return generated_map
+        raise MapGenerationError(
+            "Unable to generate a solvable layout different from the previous game"
+        )
 
     def _candidate(self, available: list[Position]) -> GeneratedMap:
         placements = self._rng.sample(available, k=self._entity_total())
@@ -174,6 +200,10 @@ class MapGenerator:
             raise MapGenerationError(
                 "Entity counts must be non-negative integers"
             )
+        if self._config.gold_count < 1:
+            raise MapGenerationError(
+                "A solvable map requires at least one gold placement"
+            )
 
         available_count = available_entity_cells(
             self._config.rows, self._config.cols
@@ -196,29 +226,12 @@ class MapGenerator:
                 "vencível para o objetivo selecionado."
             )
 
-    def _random_route(self) -> tuple[Position, ...]:
-        """Construct a seeded, varied orthogonal route from start to exit."""
-
-        row, col = START_POSITION.row, START_POSITION.col
-        route = [START_POSITION]
-        while row != self._config.rows or col != self._config.cols:
-            moves: list[tuple[int, int]] = []
-            if row < self._config.rows:
-                moves.append((1, 0))
-            if col < self._config.cols:
-                moves.append((0, 1))
-            delta_row, delta_col = self._rng.choice(moves)
-            row += delta_row
-            col += delta_col
-            route.append(Position(row, col))
-        return tuple(route)
-
     def _safe_component_for_gold(self) -> set[Position]:
-        safe_component = set(self._random_route()) | set(
-            protected_cells(self._config.rows, self._config.cols)
-        )
+        """Grow one small random hazard-free component containing a gold."""
+
+        safe_component = set(protected_cells(self._config.rows, self._config.cols))
         protected = protected_cells(self._config.rows, self._config.cols)
-        while len(safe_component.difference(protected)) < self._config.gold_count:
+        while len(safe_component.difference(protected)) < 1:
             candidates: set[Position] = set()
             for position in safe_component:
                 for candidate in (
@@ -256,13 +269,22 @@ class MapGenerator:
             ]
         protected = protected_cells(self._config.rows, self._config.cols)
         gold_slots = sorted(safe_component.difference(protected))
+        safe_gold = self._rng.choice(gold_slots)
+        entities[safe_gold] = EntityType.GOLD
+        remaining_gold_slots = [
+            position
+            for position in available
+            if position not in entities and position != safe_gold
+        ]
         entities.update(
             (position, EntityType.GOLD)
-            for position in self._rng.sample(gold_slots, k=self._config.gold_count)
+            for position in self._rng.sample(
+                remaining_gold_slots, k=self._config.gold_count - 1
+            )
         )
         generated_map = GeneratedMap(self._config.rows, self._config.cols, entities)
-        if not is_winnable(generated_map, self._objective, self._config):
-            raise AssertionError("Constructed map must satisfy the selected objective")
+        if not is_world_solvable(generated_map):
+            raise AssertionError("Constructed map must contain a safe gold route")
         return generated_map
 
     def _validate(self, generated_map: GeneratedMap) -> None:
@@ -296,5 +318,5 @@ class MapGenerator:
         if len(generated_map.entities) != self._entity_total():
             raise AssertionError("Generated entities overlap")
 
-        if not is_winnable(generated_map, self._objective, self._config):
-            raise AssertionError("Generated map is not winnable for its objective")
+        if not is_world_solvable(generated_map):
+            raise AssertionError("Generated map has no safe route to gold")

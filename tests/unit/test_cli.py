@@ -70,10 +70,15 @@ def test_run_with_no_delay_never_sleeps_and_reaches_a_terminal_status(
 
     monkeypatch.setattr(time, "sleep", fail_sleep)
 
-    outcome = main.run(["--seed", "7", "--no-delay"])
+    outcome = main.run(["--seed", "20", "--no-delay"])
     output = capsys.readouterr().out
 
-    assert outcome.status in (GameStatus.ESCAPED, GameStatus.DEAD, GameStatus.TURN_LIMIT)
+    assert outcome.status in (
+        GameStatus.ESCAPED,
+        GameStatus.DEAD,
+        GameStatus.TURN_LIMIT,
+        GameStatus.ABANDONED,
+    )
     if outcome.status is GameStatus.ESCAPED:
         assert "ESCAPOU DA CAVERNA" in output
     elif outcome.status is GameStatus.DEAD:
@@ -95,7 +100,7 @@ def test_run_with_step_prompts_for_enter_once_per_turn(
     monkeypatch.setattr(builtins, "input", fake_input)
     monkeypatch.setattr(time, "sleep", fail_sleep)
 
-    outcome = main.run(["--seed", "7", "--step"])
+    outcome = main.run(["--seed", "20", "--step"])
 
     assert len(prompts) == outcome.turns
 
@@ -105,7 +110,7 @@ def test_run_with_debug_renders_the_real_map(
 ) -> None:
     monkeypatch.setattr(time, "sleep", lambda _seconds: None)
 
-    main.run(["--seed", "7", "--debug", "--delay", "0"])
+    main.run(["--seed", "20", "--debug", "--delay", "0"])
     output = capsys.readouterr().out
 
     assert "MAPA REAL" in output
@@ -116,7 +121,7 @@ def test_run_without_debug_never_renders_the_real_map(
 ) -> None:
     monkeypatch.setattr(time, "sleep", lambda _seconds: None)
 
-    main.run(["--seed", "7", "--delay", "0"])
+    main.run(["--seed", "20", "--delay", "0"])
     output = capsys.readouterr().out
 
     assert "MAPA REAL" not in output
@@ -130,11 +135,16 @@ def test_legacy_console_dispatches_to_the_headless_renderer(
 
     monkeypatch.setattr(main, "run_tui", fail_tui)
 
-    outcome = main.main(["--seed", "7", "--no-delay", "--legacy-console"])
+    outcome = main.main(["--seed", "20", "--no-delay", "--legacy-console"])
     output = capsys.readouterr().out
 
     assert outcome is not None
-    assert outcome.status in (GameStatus.ESCAPED, GameStatus.DEAD, GameStatus.TURN_LIMIT)
+    assert outcome.status in (
+        GameStatus.ESCAPED,
+        GameStatus.DEAD,
+        GameStatus.TURN_LIMIT,
+        GameStatus.ABANDONED,
+    )
     assert "MAPA CONHECIDO PELO AGENTE" in output
 
 

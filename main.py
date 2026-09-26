@@ -28,7 +28,7 @@ if str(_SRC_DIR) not in sys.path:
 from wumpus.agent import HumanAgent, SimpleAgent
 from wumpus.debug.renderer import DebugRenderer
 from wumpus.domain import AgentObservation
-from wumpus.environment import MapGenerator, World
+from wumpus.environment import MapGenerator, World, layout_signature
 from wumpus.game import (
     GameConfig,
     GameEngine,
@@ -36,6 +36,7 @@ from wumpus.game import (
     GameOutcome,
     GameStatus,
     resolve_effective_seed,
+    seed_for_restart,
 )
 from wumpus.ui.console import ConsoleRenderer
 from wumpus.ui.retro_state import (
@@ -108,21 +109,17 @@ def build_session(settings: object) -> object:
 
     if not isinstance(settings, SessionSettings):
         raise TypeError("settings must be SessionSettings")
-    effective_seed = resolve_effective_seed(settings.seed)
-    effective_settings = (
-        settings
-        if settings.seed == effective_seed
-        else SessionSettings(
-            mode=settings.mode,
-            seed=effective_seed,
-            game_config=settings.game_config,
-            objective=settings.objective,
-        )
-    )
+    effective_settings = settings
     config = effective_settings.config
-    rng = random.Random(effective_seed)
+    game_seed = seed_for_restart(
+        effective_settings.seed, effective_settings.restart_index
+    )
+    rng = random.Random(game_seed)
     generated_map = MapGenerator(
-        rng, config, objective=effective_settings.objective
+        rng,
+        config,
+        objective=effective_settings.objective,
+        previous_layout=effective_settings.previous_layout,
     ).generate()
     world = World(generated_map, rng=rng, objective=effective_settings.objective)
 
@@ -141,6 +138,14 @@ def build_session(settings: object) -> object:
         initial_observation=world.observation(),
         mode=effective_settings.mode,
         settings=effective_settings,
+        next_settings=SessionSettings(
+            mode=effective_settings.mode,
+            seed=effective_settings.seed,
+            game_config=effective_settings.game_config,
+            objective=effective_settings.objective,
+            restart_index=effective_settings.restart_index + 1,
+            previous_layout=layout_signature(generated_map),
+        ),
         debug_map_source=lambda: build_real_map_view(world.debug_snapshot()),
         manual_action_submitter=submitter,
         manual_action_clearer=clearer,
@@ -177,6 +182,8 @@ def run(argv: list[str] | None = None) -> GameOutcome:
             print("ESCAPOU DA CAVERNA")
         elif outcome.status is GameStatus.DEAD:
             print("AGENTE MORREU")
+        elif outcome.status is GameStatus.ABANDONED:
+            print("AGENTE INTERROMPEU A EXPLORAÇÃO SEM ROTA RACIONAL")
 
     engine = GameEngine(
         world,

@@ -117,7 +117,7 @@ def test_the_hud_names_the_objective_and_the_exit_room(
         assert "OBJETIVO" in hud
         assert label in hud
         assert "SAÍDA" in hud
-        assert "[6,6]" in hud
+        assert "[1,1]" in hud
 
     run_scenario(scenario)
 
@@ -139,7 +139,7 @@ def test_the_final_summary_reports_the_objective_and_both_structural_rooms() -> 
         ):
             assert label in summary, label
         assert "ESCAPAR RÁPIDO" in summary
-        assert "[1,1]" in summary and "[6,6]" in summary
+        assert summary.count("[1,1]") == 2
 
     run_scenario(scenario)
 
@@ -175,7 +175,7 @@ def test_invalid_capacity_stays_on_setup_and_shows_a_readable_error() -> None:
         setup = app.screen
         assert isinstance(setup, SetupScreen)
         setup.action_select_autonomous()
-        setup.action_select_collect_all_gold()
+        setup.action_select_escape_fast()
         setup.query_one("#wumpus-count", Input).value = "34"
         setup.query_one("#pit-count", Input).value = "0"
         setup.query_one("#gold-count", Input).value = "0"
@@ -184,7 +184,7 @@ def test_invalid_capacity_stays_on_setup_and_shows_a_readable_error() -> None:
         assert isinstance(app.screen, SetupScreen)
         error = setup.query_one("#setup-error").visual.plain
         assert "CONFIGURAÇÃO INVÁLIDA" in error
-        assert "32 células" in error
+        assert "33 células" in error
 
     run_scenario(scenario)
 
@@ -309,7 +309,7 @@ def test_restart_during_animation_cancels_the_old_session_and_preserves_settings
     run_scenario(scenario)
 
 
-def test_automatic_seed_is_shown_and_restart_reuses_the_same_map() -> None:
+def test_automatic_seed_is_shown_and_restart_uses_the_next_map() -> None:
     app = RetroGameApp(
         session_factory=main.build_session,
         seed=None,
@@ -336,7 +336,8 @@ def test_automatic_seed_is_shown_and_restart_reuses_the_same_map() -> None:
             assert second is not None
             assert second.session.settings.seed == seed
             assert second.session.debug_map_source is not None
-            assert second.session.debug_map_source().tiles == tiles
+            assert second.session.settings.restart_index == 1
+            assert second.session.debug_map_source().tiles != tiles
 
     asyncio.run(runner())
 
@@ -392,7 +393,7 @@ def test_building_visual_events_does_not_change_the_seeded_outcome() -> None:
         setup = app.screen
         assert isinstance(setup, SetupScreen)
         setup.action_select_autonomous()
-        setup.action_select_collect_all_gold()
+        setup.action_select_escape_fast()
         setup.action_start_game()
         await pilot.pause()
         game = app.game_screen
@@ -403,7 +404,7 @@ def test_building_visual_events_does_not_change_the_seeded_outcome() -> None:
             game.animation_controller.cancel()
         game.advance_one_turn()
 
-        world, agent = main.build_game(42)
+        world, agent = main.build_game(42, objective=GameObjective.ESCAPE_FAST)
         assert game.outcome == GameEngine(world, agent).run()
 
     run_scenario(scenario)

@@ -9,6 +9,7 @@ from wumpus.game.config import (
     exit_position_for,
     protected_cells,
     resolve_effective_seed,
+    seed_for_restart,
 )
 from wumpus.game.engine import GameEngine, GameOutcome, GameStatus
 from wumpus.game.objective import GameObjective, OBJECTIVE_LABELS
@@ -27,4 +28,5 @@ __all__ = (
     "exit_position_for",
     "protected_cells",
     "resolve_effective_seed",
+    "seed_for_restart",
 )

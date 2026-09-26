@@ -25,7 +25,11 @@ from wumpus.agent.knowledge import (
     KnowledgeBase,
     KnowledgeConflictError,
 )
-from wumpus.agent.memory import AgentMemory, PerceptionRecord
+from wumpus.agent.memory import (
+    AgentMemory,
+    PerceptionRecord,
+    StagnationEvent,
+)
 from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
 from wumpus.agent.reasoning import DecisionReason
 from wumpus.agent.risk import (
@@ -59,6 +63,7 @@ __all__ = (
     "MAX_INFERENCE_CYCLES",
     "NO_GOLD_RISK_THRESHOLD",
     "PerceptionRecord",
+    "StagnationEvent",
     "RISK_THRESHOLD",
     "RiskCandidate",
     "SimpleAgent",

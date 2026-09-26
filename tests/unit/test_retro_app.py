@@ -310,7 +310,7 @@ def test_minimum_height_contains_legend_and_a_usable_decision_panel() -> None:
         assert decision.content_region.height > 0
         assert legend.region.height >= 14
         board = screen.query_one("#map-known", PixelMapWidget).visual.plain
-        assert board.count("INI") == 1 and board.count("SAI") == 1
+        assert board.count("INI") == 1 and board.count("SAI") == 0
 
     drive(scenario, size=(MIN_WIDTH, MIN_HEIGHT))
 

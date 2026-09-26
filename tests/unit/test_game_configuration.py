@@ -15,7 +15,7 @@ from wumpus.ui.retro_session import GameMode, SessionSettings, validate_cave
 @pytest.mark.parametrize(
     "config",
     (GameConfig(), GameConfig(wumpus_count=1, pit_count=2, gold_count=5, bat_count=3),
-     GameConfig(wumpus_count=0, pit_count=0, gold_count=0, bat_count=0)),
+     GameConfig(wumpus_count=0, pit_count=0, gold_count=1, bat_count=0)),
 )
 def test_generator_uses_exact_custom_counts(config: GameConfig) -> None:
     generated = MapGenerator(random.Random(42), config).generate()
@@ -26,9 +26,9 @@ def test_generator_uses_exact_custom_counts(config: GameConfig) -> None:
     assert counts[EntityType.BAT] == config.bat_count
 
 
-def test_more_than_32_entities_is_rejected_in_ui_and_generator() -> None:
-    config = GameConfig(wumpus_count=33, pit_count=0, gold_count=0, bat_count=0)
-    assert "32 células" in (validate_cave(config) or "")
+def test_more_than_33_entities_is_rejected_in_ui_and_generator() -> None:
+    config = GameConfig(wumpus_count=33, pit_count=0, gold_count=1, bat_count=0)
+    assert "33 células" in (validate_cave(config) or "")
     with pytest.raises(MapGenerationError, match="exceeds"):
         MapGenerator(random.Random(1), config).generate()
 
@@ -48,7 +48,7 @@ def test_session_factory_selects_the_requested_agent_contract() -> None:
     assert autonomous.manual_action_submitter is None
 
 
-def test_automatic_session_seed_is_concrete_and_restart_replays_the_map() -> None:
+def test_automatic_session_seed_is_concrete_and_initial_session_replays_the_map() -> None:
     settings = SessionSettings(
         GameMode.MANUAL,
         None,

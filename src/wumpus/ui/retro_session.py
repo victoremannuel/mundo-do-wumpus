@@ -15,7 +15,7 @@ authorized debug view source. The real `World` never appears here.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 
 from wumpus.domain import Action, AgentObservation
@@ -51,6 +51,10 @@ class SessionSettings:
     seed: int | None = None
     game_config: GameConfig | None = None
     objective: GameObjective = GameObjective.COLLECT_ALL_GOLD
+    restart_index: int = 0
+    previous_layout: tuple[tuple[int, int, str], ...] | None = field(
+        default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         """Freeze a concrete identity before a session is assembled."""
@@ -79,6 +83,7 @@ class GameSession:
     initial_observation: AgentObservation
     mode: GameMode
     settings: SessionSettings
+    next_settings: SessionSettings | None = None
     debug_map_source: DebugMapSource | None = None
     manual_action_submitter: ManualActionSubmitter | None = None
     manual_action_clearer: ManualActionClearer | None = None

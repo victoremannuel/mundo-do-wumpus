@@ -44,10 +44,10 @@ def world_with(
     )
 
 
-EXIT_SCRIPT = (Action.MOVE_FORWARD,) * 5 + (Action.TURN_RIGHT,) + (Action.MOVE_FORWARD,) * 5
+EXIT_SCRIPT = (Action.CLIMB,)
 
 
-def test_engine_stops_when_the_agent_enters_the_automatic_exit() -> None:
+def test_engine_stops_when_the_agent_climbs_at_the_start_exit() -> None:
     world = world_with()
     agent = ScriptedAgent(EXIT_SCRIPT, fallback=Action.TURN_RIGHT)
     engine = GameEngine(world, agent)
@@ -118,7 +118,7 @@ def test_engine_follows_the_perceive_decide_act_learn_cycle() -> None:
     assert agent.observations[0].collected_gold == 0
     assert agent.observations[0].perception.glitter is True
     assert agent.observations[1].collected_gold == 1
-    assert [result.action for result in agent.results[:2]] == [Action.GRAB, Action.MOVE_FORWARD]
+    assert [result.action for result in agent.results[:2]] == [Action.GRAB, Action.CLIMB]
     assert outcome.collected_gold == 1
     assert outcome.score == world.score
 
@@ -165,7 +165,16 @@ def test_engine_renders_before_deciding_and_renders_final_after_learning() -> No
         GeneratedMap(rows=2, cols=2, entities={}),
         rng=random.Random(0),
     )
-    agent = RecordingAgent([Action.MOVE_FORWARD, Action.TURN_RIGHT, Action.MOVE_FORWARD], fallback=Action.TURN_RIGHT)
+    agent = RecordingAgent(
+        [
+            Action.MOVE_FORWARD,
+            Action.TURN_LEFT,
+            Action.TURN_LEFT,
+            Action.MOVE_FORWARD,
+            Action.CLIMB,
+        ],
+        fallback=Action.TURN_RIGHT,
+    )
     seen_observations: list[AgentObservation] = []
     seen_outcomes: list[GameOutcome] = []
 
@@ -186,7 +195,7 @@ def test_engine_renders_before_deciding_and_renders_final_after_learning() -> No
 
     outcome = engine.run()
 
-    assert events == ["observe", "render", "decide", "execute", "process_result"] * 3 + ["render_final"]
+    assert events == ["observe", "render", "decide", "execute", "process_result"] * 5 + ["render_final"]
     assert seen_observations == agent.observations
     assert seen_outcomes == [outcome]
 
@@ -260,7 +269,7 @@ def test_observation_reports_an_inactive_agent_after_the_game_ends() -> None:
     observation = world.observation()
 
     assert observation.active is False
-    assert observation.position == Position(6, 6)
+    assert observation.position == Position(1, 1)
 
 
 def test_seeded_games_with_the_simple_agent_are_reproducible() -> None:

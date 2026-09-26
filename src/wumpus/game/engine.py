@@ -17,6 +17,7 @@ class GameStatus(Enum):
     ESCAPED = auto()
     DEAD = auto()
     TURN_LIMIT = auto()
+    ABANDONED = auto()
 
 
 class Environment(Protocol):
@@ -113,7 +114,11 @@ class GameEngine:
 
     @property
     def is_over(self) -> bool:
-        return self._environment.game_over or self._turns >= self._max_turns
+        return (
+            self._environment.game_over
+            or self._agent_abandoned()
+            or self._turns >= self._max_turns
+        )
 
     def step(self) -> ActionResult:
         """Run exactly one turn of the perceive-decide-act-learn cycle."""
@@ -162,4 +167,11 @@ class GameEngine:
             return GameStatus.ESCAPED
         if self._environment.dead:
             return GameStatus.DEAD
+        if self._agent_abandoned():
+            return GameStatus.ABANDONED
         return GameStatus.TURN_LIMIT
+
+    def _agent_abandoned(self) -> bool:
+        """Honor an optional, agent-owned rational-stop signal."""
+
+        return bool(getattr(self._agent, "abandoned", False))

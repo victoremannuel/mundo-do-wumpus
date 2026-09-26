@@ -402,6 +402,42 @@ User authorization `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` on 2026-09-25;
 `tests/unit/test_game_configuration.py`; stress evidence in
 `.specs/implementation-status.md`.
 
+## DEC-010 — Random layouts require a private guaranteed gold route
+
+Date: 2026-09-26
+Status: ACCEPTED
+Affected phase(s): corrective maintenance — generation, restart, strategy
+
+Context:
+The prior maintenance allowed a far-corner automatic exit and an
+objective-dependent map guarantee. The current corrective requirement restores
+`[1,1]` plus `CLIMB` as the exit rule and prohibits accepting any layout with
+no real safe route to gold and back.
+
+Decision:
+Mapas aleatórios continuam sendo utilizados, porém somente layouts que possuam
+pelo menos uma rota válida de vitória podem ser aceitos. `MapGenerator` owns a
+bounded private BFS from `[1,1]`, treating pit, live Wumpus, and bat as
+blocked, and accepts a candidate only if at least one gold is reachable. It
+never passes that result, path, layout, or component to the agent. A session
+derives one RNG seed per restart from its concrete base seed and restart index;
+the immediately previous layout fingerprint is rejected.
+
+Reason:
+This preserves random procedural variety and reproducible debugging while
+proving a minimal physical victory route without weakening partial
+observability or making solvability an agent heuristic.
+
+Consequences:
+The initial safe zone remains protected, canonical entity counts remain 2/4/3/2,
+and maps with zero gold are invalid because they cannot meet the universal
+solvability rule. `ESCAPE_FAST` and `COLLECT_ALL_GOLD` remain selectable game
+policies, but their strategy receives only observations and agent knowledge.
+
+Evidence:
+`src/wumpus/environment/generator.py`; `main.py`; `tests/unit/test_solvable_generation_restart.py`;
+`tests/unit/test_cycle_recovery.py`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

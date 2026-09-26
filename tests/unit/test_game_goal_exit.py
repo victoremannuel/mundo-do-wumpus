@@ -53,38 +53,30 @@ def world_2x2(
     )
 
 
-def enter_exit(world: World) -> object:
-    world.execute(Action.MOVE_FORWARD)
-    world.execute(Action.TURN_RIGHT)
-    return world.execute(Action.MOVE_FORWARD)
-
-
-def test_config_centralizes_the_opposite_corner_exit_and_capacity() -> None:
+def test_config_centralizes_the_start_exit_and_capacity() -> None:
     config = GameConfig()
-    assert config.exit_position == Position(6, 6)
-    assert Position(1, 1) == Position(1, 1)
-    assert available_entity_cells(6, 6) == 32
-    assert available_entity_cells(2, 2) == 0
+    assert config.exit_position == Position(1, 1)
+    assert available_entity_cells(6, 6) == 33
+    assert available_entity_cells(2, 2) == 1
 
 
-def test_generator_keeps_exit_and_initial_zone_empty_for_one_hundred_seeds() -> None:
+def test_generator_keeps_initial_zone_empty_for_one_hundred_seeds() -> None:
     config = GameConfig()
     for seed in range(100):
         generated = MapGenerator(random.Random(seed), config).generate()
-        assert config.exit_position not in generated.entities
         assert all(cell not in generated.entities for cell in (Position(1, 1), Position(1, 2), Position(2, 1)))
 
 
-def test_generator_rejects_capacity_valid_but_structurally_unwinnable_entities() -> None:
-    full = GameConfig(wumpus_count=32, pit_count=0, gold_count=0, bat_count=0)
-    with pytest.raises(MapGenerationError, match="mapa vencível"):
-        MapGenerator(random.Random(1), full).generate()
-    too_many = GameConfig(wumpus_count=33, pit_count=0, gold_count=0, bat_count=0)
+def test_generator_rejects_configurations_without_any_gold() -> None:
+    no_gold = GameConfig(wumpus_count=0, pit_count=0, gold_count=0, bat_count=0)
+    with pytest.raises(MapGenerationError, match="at least one gold"):
+        MapGenerator(random.Random(1), no_gold).generate()
+    too_many = GameConfig(wumpus_count=33, pit_count=0, gold_count=1, bat_count=0)
     with pytest.raises(MapGenerationError):
         MapGenerator(random.Random(1), too_many).generate()
 
 
-def test_winnability_is_objective_aware_for_an_isolated_gold() -> None:
+def test_winnability_rejects_an_isolated_gold_for_every_objective() -> None:
     config = GameConfig(rows=5, cols=5)
     generated = GeneratedMap(
         rows=5,
@@ -97,7 +89,7 @@ def test_winnability_is_objective_aware_for_an_isolated_gold() -> None:
             Position(4, 3): EntityType.PIT,
         },
     )
-    assert is_winnable(generated, GameObjective.ESCAPE_FAST, config)
+    assert not is_winnable(generated, GameObjective.ESCAPE_FAST, config)
     assert not is_winnable(generated, GameObjective.COLLECT_ALL_GOLD, config)
 
 
@@ -107,13 +99,10 @@ def test_default_maps_are_winnable_for_one_hundred_seeds(objective: GameObjectiv
     for seed in range(100):
         generated = MapGenerator(random.Random(seed), config, objective=objective).generate()
         reachable = independently_reachable(generated, config)
-        assert config.exit_position in reachable
-        if objective is GameObjective.COLLECT_ALL_GOLD:
-            assert all(
-                position in reachable
-                for position, entity in generated.entities.items()
-                if entity is EntityType.GOLD
-            )
+        assert any(
+            position in reachable and entity is EntityType.GOLD
+            for position, entity in generated.entities.items()
+        )
 
 
 @pytest.mark.parametrize("objective", tuple(GameObjective))
@@ -126,17 +115,15 @@ def test_same_seed_config_and_objective_reproduce_the_same_map(
     assert first.entities == second.entities
 
 
-def test_fast_escape_is_automatic_and_climb_at_start_never_wins() -> None:
+def test_fast_escape_climbs_from_the_start() -> None:
     world = world_2x2(objective=GameObjective.ESCAPE_FAST)
     climb = world.execute(Action.CLIMB)
-    assert not climb.escaped and not world.game_over
-    result = enter_exit(world)
-    assert result.escaped and world.escaped and world.game_over
+    assert climb.escaped and world.game_over
 
 
-def test_collect_all_blocks_then_escapes_after_every_gold() -> None:
+def test_collect_all_blocks_then_climbs_after_every_gold() -> None:
     blocked = world_2x2({Position(1, 2): EntityType.GOLD}, objective=GameObjective.COLLECT_ALL_GOLD)
-    result = enter_exit(blocked)
+    result = blocked.execute(Action.CLIMB)
     assert result.exit_blocked and not result.escaped and not blocked.game_over
 
     complete = world_2x2({Position(1, 2): EntityType.GOLD}, objective=GameObjective.COLLECT_ALL_GOLD)
@@ -144,13 +131,15 @@ def test_collect_all_blocks_then_escapes_after_every_gold() -> None:
     complete.execute(Action.MOVE_FORWARD)
     complete.execute(Action.GRAB)
     complete.execute(Action.TURN_LEFT)
-    result = complete.execute(Action.MOVE_FORWARD)
+    complete.execute(Action.TURN_LEFT)
+    complete.execute(Action.MOVE_FORWARD)
+    result = complete.execute(Action.CLIMB)
     assert result.escaped and complete.game_over
 
 
-def test_collect_all_with_zero_gold_escapes_at_the_exit() -> None:
+def test_collect_all_with_zero_gold_climbs_at_the_start() -> None:
     world = world_2x2(objective=GameObjective.COLLECT_ALL_GOLD)
-    assert enter_exit(world).escaped
+    assert world.execute(Action.CLIMB).escaped
 
 
 @pytest.mark.parametrize(
@@ -161,7 +150,7 @@ def test_collect_all_with_zero_gold_escapes_at_the_exit() -> None:
         (GameObjective.COLLECT_ALL_GOLD, True, False),
     ),
 )
-def test_bat_teleport_to_exit_uses_the_same_exit_rule(
+def test_bat_teleport_does_not_bypass_the_start_climb_rule(
     monkeypatch: pytest.MonkeyPatch,
     objective: GameObjective,
     gold: bool,
@@ -173,8 +162,8 @@ def test_bat_teleport_to_exit_uses_the_same_exit_rule(
     monkeypatch.setattr(world_module, "choose_teleport_destination", lambda *_args, **_kwargs: Position(2, 2))
     world = world_2x2(entities, objective=objective)
     result = world.execute(Action.MOVE_FORWARD)
-    assert result.teleported and result.escaped is escapes and world.game_over is escapes
-    assert result.exit_blocked is gold
+    assert result.teleported and not result.escaped and not world.game_over
+    assert not result.exit_blocked
 
 
 def safe_knowledge() -> KnowledgeBase:
@@ -194,13 +183,11 @@ def test_strategy_fast_ignores_glitter_but_collect_all_grabs_it() -> None:
     assert collect.decide(**kwargs) is Action.GRAB
 
 
-def test_strategy_collect_all_targets_exit_after_last_gold_without_climb() -> None:
+def test_strategy_collect_all_climbs_after_last_gold_at_the_start() -> None:
     knowledge = safe_knowledge()
-    strategy = Strategy(total_gold=1, objective=GameObjective.COLLECT_ALL_GOLD, exit_position=Position(3, 3))
+    strategy = Strategy(total_gold=1, objective=GameObjective.COLLECT_ALL_GOLD, exit_position=Position(1, 1))
     action = strategy.decide(knowledge=knowledge, position=Position(1, 1), direction=Direction.NORTH, collected_gold=1, glitter=False)
-    assert action is Action.MOVE_FORWARD
-    assert strategy._target == Position(3, 3)
-    assert action is not Action.CLIMB
+    assert action is Action.CLIMB
 
 
 def test_fast_frontier_prefers_estimated_progress_but_never_confirmed_danger() -> None:

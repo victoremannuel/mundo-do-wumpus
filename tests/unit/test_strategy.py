@@ -386,7 +386,7 @@ def test_strategy_utility_rejects_bat_risk_after_two_gold() -> None:
     assert strategy._target is None
 
 
-def test_strategy_never_climbs_with_all_configured_gold_despite_safe_frontier() -> None:
+def test_strategy_climbs_at_the_start_after_all_configured_gold() -> None:
     knowledge = safe_knowledge(3, 3, [START_POSITION])
     knowledge.mark_safe(Position(2, 1))
     strategy = Strategy(total_gold=3)
@@ -399,10 +399,10 @@ def test_strategy_never_climbs_with_all_configured_gold_despite_safe_frontier() 
         glitter=False,
     )
 
-    assert action is Action.TURN_RIGHT
+    assert action is Action.CLIMB
 
 
-def test_strategy_does_not_return_home_with_all_configured_gold() -> None:
+def test_strategy_returns_home_with_all_configured_gold() -> None:
     knowledge = safe_knowledge(
         3,
         3,
@@ -420,7 +420,7 @@ def test_strategy_does_not_return_home_with_all_configured_gold() -> None:
     )
 
     assert action is Action.TURN_RIGHT
-    assert strategy._target is None
+    assert strategy._target == START_POSITION
 
 
 def test_strategy_ignores_an_unsafe_cell_that_is_not_reachable() -> None:

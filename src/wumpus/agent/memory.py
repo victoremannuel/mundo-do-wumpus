@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 
 from wumpus.agent.knowledge import KnowledgeBase
@@ -26,6 +27,28 @@ class PerceptionRecord:
     action: Action | None = None
 
 
+MAX_TURNS_WITHOUT_PROGRESS = 6
+MAX_CONSECUTIVE_ROTATIONS = 4
+
+
+@dataclass(frozen=True)
+class StagnationEvent:
+    """Observable evidence that execution stopped making semantic progress."""
+
+    position: Position
+    objective: Position | None
+    rotations: int
+    turns_without_progress: int
+    knowledge_revision: int
+
+
+@dataclass(frozen=True)
+class _PendingAction:
+    position: Position
+    knowledge_revision: int
+    objective: Position | None
+
+
 class AgentMemory:
     """Remember observable game history without deriving new knowledge."""
 
@@ -46,6 +69,15 @@ class AgentMemory:
         self._actions: list[Action] = []
         self._score = 0
         self._collected_gold = 0
+        self._pending_action: _PendingAction | None = None
+        self._recent_positions: deque[Position] = deque(maxlen=8)
+        self._recent_actions: deque[Action] = deque(maxlen=8)
+        self._recent_objectives: deque[Position | None] = deque(maxlen=8)
+        self._recent_state_signatures: deque[tuple[Position, Position | None, int]] = (
+            deque(maxlen=8)
+        )
+        self._turns_without_progress = 0
+        self._consecutive_rotations = 0
 
     @property
     def position(self) -> Position:
@@ -86,6 +118,78 @@ class AgentMemory:
     @property
     def collected_gold(self) -> int:
         return self._collected_gold
+
+    @property
+    def turns_without_progress(self) -> int:
+        return self._turns_without_progress
+
+    @property
+    def recent_actions(self) -> tuple[Action, ...]:
+        return tuple(self._recent_actions)
+
+    @property
+    def recent_state_signatures(self) -> tuple[tuple[Position, Position | None, int], ...]:
+        return tuple(self._recent_state_signatures)
+
+    def begin_action(self, objective: Position | None) -> None:
+        """Snapshot observable state after deciding, before execution."""
+
+        self._pending_action = _PendingAction(
+            position=self._position,
+            knowledge_revision=self._knowledge.revision,
+            objective=objective,
+        )
+
+    def finish_action(self, result: ActionResult) -> StagnationEvent | None:
+        """Classify the completed action without retaining hidden world state."""
+
+        pending = self._pending_action
+        self._pending_action = None
+        if pending is None:
+            return None
+
+        revision = self._knowledge.revision
+        progress = (
+            result.position != pending.position
+            or revision != pending.knowledge_revision
+            or result.gold_collected
+            or result.wumpus_killed
+            or result.teleported
+            or result.died
+            or result.escaped
+        )
+        self._recent_positions.append(result.position)
+        self._recent_actions.append(result.action)
+        self._recent_objectives.append(pending.objective)
+        self._recent_state_signatures.append(
+            (result.position, pending.objective, revision)
+        )
+        if progress:
+            self._turns_without_progress = 0
+            self._consecutive_rotations = 0
+            return None
+
+        self._turns_without_progress += 1
+        if result.action in (Action.TURN_LEFT, Action.TURN_RIGHT):
+            self._consecutive_rotations += 1
+        else:
+            self._consecutive_rotations = 0
+
+        if (
+            self._consecutive_rotations >= MAX_CONSECUTIVE_ROTATIONS
+            or self._turns_without_progress >= MAX_TURNS_WITHOUT_PROGRESS
+        ):
+            event = StagnationEvent(
+                position=result.position,
+                objective=pending.objective,
+                rotations=self._consecutive_rotations,
+                turns_without_progress=self._turns_without_progress,
+                knowledge_revision=revision,
+            )
+            self._turns_without_progress = 0
+            self._consecutive_rotations = 0
+            return event
+        return None
 
     def record_observation(self, observation: AgentObservation) -> None:
         """Remember the current observable state before a decision."""

@@ -25,6 +25,7 @@ def play(seed: int, objective: GameObjective = GameObjective.COLLECT_ALL_GOLD) -
         GameStatus.ESCAPED,
         GameStatus.DEAD,
         GameStatus.TURN_LIMIT,
+        GameStatus.ABANDONED,
     }
     return outcome
 

@@ -6,6 +6,7 @@ from collections import deque
 
 from wumpus.agent.exit_policy import should_explore
 from wumpus.agent.knowledge import KnowledgeBase
+from wumpus.agent.memory import StagnationEvent
 from wumpus.agent.planner import FORWARD_DELTA, find_path, plan_actions, turns_to_face
 from wumpus.agent.reasoning import DecisionReason
 from wumpus.agent.risk import least_risk_candidate, least_risk_candidate_toward
@@ -38,12 +39,56 @@ class Strategy:
         self._path: list[Position] = []
         self._actions: deque[Action] = deque()
         self._last_reason: DecisionReason | None = None
+        self._blocked_targets: set[tuple[Position, int]] = set()
+        self._last_cycle: StagnationEvent | None = None
+        self._recovery_required = False
+        self._abandoned = False
 
     @property
     def last_reason(self) -> DecisionReason | None:
         """Return the structured explanation for the most recent `decide` call."""
 
         return self._last_reason
+
+    @property
+    def current_target(self) -> Position | None:
+        """Return the agent-owned objective of the active plan."""
+
+        return self._target
+
+    @property
+    def planned_actions(self) -> tuple[Action, ...]:
+        """Expose the remaining action queue for diagnostics and tests."""
+
+        return tuple(self._actions)
+
+    @property
+    def blocked_targets(self) -> frozenset[tuple[Position, int]]:
+        return frozenset(self._blocked_targets)
+
+    @property
+    def last_cycle(self) -> StagnationEvent | None:
+        return self._last_cycle
+
+    @property
+    def abandoned(self) -> bool:
+        """Whether every agent-legal recovery alternative was exhausted."""
+
+        return self._abandoned
+
+    def recover_from_stagnation(self, event: StagnationEvent) -> None:
+        """Invalidate one failed plan while retaining all learned knowledge."""
+
+        if event.objective is not None:
+            self._blocked_targets.add((event.objective, event.knowledge_revision))
+        self._clear()
+        self._last_cycle = event
+        self._recovery_required = True
+        self._last_reason = DecisionReason(
+            None,
+            "CYCLE_DETECTED: plano invalidado; replanejamento com alvo bloqueado",
+            event.objective,
+        )
 
     def decide(
         self,
@@ -56,6 +101,32 @@ class Strategy:
     ) -> Action:
         """Return one deterministic action for the configured match objective."""
 
+        if self._recovery_required:
+            self._recovery_required = False
+            recovery = self._recovery_action(
+                knowledge, position, direction, collected_gold
+            )
+            if recovery is not None:
+                return recovery
+            self._abandoned = True
+            self._last_reason = DecisionReason(
+                Action.TURN_RIGHT,
+                "CYCLE_DETECTED: sem alternativa racional; encerrando execução",
+                None,
+            )
+            return Action.TURN_RIGHT
+
+        # A turn is one step of a route, not a new strategic decision.  Keep
+        # executing the agent-owned queue until a semantic invalidation (bump,
+        # teleport, changed position, blocked target, or explicit recovery)
+        # proves that the plan no longer applies.
+        if (
+            self._target is not None
+            and not self._is_blocked(self._target, knowledge.revision)
+            and self._is_plan_valid(self._target, position)
+        ):
+            return self._advance()
+
         if self._objective is GameObjective.ESCAPE_FAST:
             return self._decide_fast_escape(knowledge, position, direction, collected_gold)
         if self._objective is GameObjective.COLLECT_ALL_GOLD:
@@ -63,6 +134,61 @@ class Strategy:
                 knowledge, position, direction, collected_gold, glitter
             )
         raise AssertionError(f"Unsupported game objective: {self._objective!r}")
+
+    def _recovery_action(
+        self,
+        knowledge: KnowledgeBase,
+        position: Position,
+        direction: Direction,
+        collected_gold: int,
+    ) -> Action | None:
+        """Try a bounded alternative after a semantically stagnant plan.
+
+        Normal strategy first receives another chance to choose safe frontiers.
+        If none exists, this recovery may approach the lowest-risk *unconfirmed*
+        candidate.  It never selects a confirmed pit or live Wumpus merely to
+        escape a loop.
+        """
+
+        unexplored = sorted(
+            knowledge.safe - knowledge.visited,
+            key=lambda cell: (position.manhattan_distance(cell), cell),
+        )
+        action = self._pursue(knowledge, position, direction, unexplored)
+        if action is not None:
+            self._last_reason = DecisionReason(
+                action, "CYCLE_DETECTED: fronteira segura alternativa", self._target
+            )
+            return action
+
+        action = self._hunt(knowledge, position, direction, collected_gold)
+        if action is not None:
+            self._last_reason = DecisionReason(
+                action, "CYCLE_DETECTED: removendo bloqueio confirmado", self._target
+            )
+            return action
+
+        candidate = least_risk_candidate(knowledge, position)
+        if candidate is not None:
+            action = self._approach(knowledge, position, direction, candidate.position)
+            if action is not None:
+                self._last_reason = DecisionReason(
+                    action,
+                    "CYCLE_DETECTED: explorando alternativa de menor risco",
+                    candidate.position,
+                )
+                return action
+
+        if position != self._exit_position:
+            action = self._pursue(
+                knowledge, position, direction, (self._exit_position,)
+            )
+            if action is not None:
+                self._last_reason = DecisionReason(
+                    action, "CYCLE_DETECTED: retorno seguro para a saída", self._target
+                )
+                return action
+        return None
 
     def _decide_collect_all(
         self,
@@ -131,6 +257,13 @@ class Strategy:
         collected_gold: int,
     ) -> Action:
         """Reach the public exit efficiently without sacrificing known safety."""
+
+        if position == self._exit_position:
+            self._clear()
+            self._last_reason = DecisionReason(
+                Action.CLIMB, "Na saída: encerrando a partida", position
+            )
+            return Action.CLIMB
 
         action = self._pursue(
             knowledge, position, direction, (self._exit_position,)
@@ -369,7 +502,14 @@ class Strategy:
         position: Position,
         direction: Direction,
     ) -> Action:
-        """Navigate safely to the automatic exit, or wait without guessing."""
+        """Navigate safely to the exit, then climb when its rule is satisfied."""
+
+        if position == self._exit_position:
+            self._clear()
+            self._last_reason = DecisionReason(
+                Action.CLIMB, "Objetivo cumprido: saindo da caverna", position
+            )
+            return Action.CLIMB
 
         action = self._pursue(knowledge, position, direction, (self._exit_position,))
         if action is not None:
@@ -501,13 +641,16 @@ class Strategy:
         if (
             self._target is not None
             and self._target in candidates
+            and not self._is_blocked(self._target, knowledge.revision)
             and self._is_plan_valid(self._target, position)
         ):
             return self._advance()
 
         for target in candidates:
+            if target == position or self._is_blocked(target, knowledge.revision):
+                continue
             path = find_path(knowledge, position, target)
-            if path is not None:
+            if path is not None and len(path) >= 2:
                 self._target = target
                 self._path = path
                 self._actions = plan_actions(path, direction)
@@ -533,6 +676,14 @@ class Strategy:
             and self._path[0] == position
             and bool(self._actions)
         )
+
+    def _is_blocked(self, target: Position, revision: int) -> bool:
+        """A target failed only for the knowledge state that produced it."""
+
+        self._blocked_targets = {
+            blocked for blocked in self._blocked_targets if blocked[1] == revision
+        }
+        return (target, revision) in self._blocked_targets
 
     def _clear(self) -> None:
         self._target = None

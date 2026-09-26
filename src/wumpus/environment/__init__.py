@@ -10,7 +10,9 @@ from wumpus.environment.generator import (
     GeneratedMap,
     MapGenerationError,
     MapGenerator,
+    is_world_solvable,
     is_winnable,
+    layout_signature,
 )
 from wumpus.environment.world import (
     EXIT_BLOCKED_EVENT,
@@ -30,7 +32,9 @@ __all__ = (
     "INVALID_CLIMB_EVENT",
     "MapGenerationError",
     "MapGenerator",
+    "is_world_solvable",
     "is_winnable",
+    "layout_signature",
     "START_DIRECTION",
     "START_POSITION",
     "World",

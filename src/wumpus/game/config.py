@@ -26,6 +26,14 @@ def resolve_effective_seed(seed: int | None) -> int:
         raise TypeError("seed must be an integer or None")
     return seed
 
+
+def seed_for_restart(base_seed: int, restart_index: int) -> int:
+    """Derive a stable, distinct RNG seed for one session in a sequence."""
+
+    if restart_index < 0:
+        raise ValueError("restart_index must be non-negative")
+    return base_seed + restart_index
+
 # The rooms the rules keep free of entities so the agent always starts alive and
 # with one legal first move. This is a game rule, not a generation detail, so it
 # lives beside the other rules and is re-exported by the generator that enforces
@@ -50,7 +58,7 @@ class GameConfig:
 
     @property
     def exit_position(self) -> Position:
-        """The public, protected exit in the far corner of this map."""
+        """The public structural exit, co-located with the start room."""
 
         return exit_position_for(self.rows, self.cols)
 
@@ -77,9 +85,15 @@ def available_entity_cells(rows: int, cols: int) -> int:
 
 
 def exit_position_for(rows: int, cols: int) -> Position:
-    """Return the single structural exit for any valid map dimensions."""
+    """Return the single structural exit for any valid map dimensions.
 
-    return Position(rows, cols)
+    The rules deliberately make the spawn room the exit.  Keeping this as a
+    function preserves the single public derivation used by the world,
+    strategy, and presentation layers.
+    """
+
+    del rows, cols
+    return START_POSITION
 
 
 def protected_cells(rows: int, cols: int) -> frozenset[Position]:
@@ -87,6 +101,6 @@ def protected_cells(rows: int, cols: int) -> frozenset[Position]:
 
     return frozenset(
         position
-        for position in (*SAFE_INITIAL_CELLS, exit_position_for(rows, cols))
+        for position in SAFE_INITIAL_CELLS
         if position.is_inside(rows, cols)
     )

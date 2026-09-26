@@ -97,12 +97,16 @@ class SetupScreen(Screen[None]):
         config: GameConfig | None = None,
         mode: GameMode | None = None,
         objective: GameObjective | None = None,
+        restart_index: int = 0,
+        previous_layout: tuple[tuple[int, int, str], ...] | None = None,
     ) -> None:
         super().__init__()
         self.seed = seed
         self.config = config if config is not None else GameConfig()
         self.selected_mode = mode
         self.selected_objective = objective
+        self.restart_index = restart_index
+        self.previous_layout = previous_layout
 
     def compose(self) -> ComposeResult:
         with Center():
@@ -208,6 +212,8 @@ class SetupScreen(Screen[None]):
             seed=self.seed,
             game_config=config,
             objective=self.selected_objective,
+            restart_index=self.restart_index,
+            previous_layout=self.previous_layout,
         )
         self.app.start_session(settings)  # type: ignore[attr-defined]
 

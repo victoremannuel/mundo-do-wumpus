@@ -12,10 +12,10 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 
 ## Current phase
 
-FASE 21 — README final (`VERIFIED`); post-plan maintenance
-`GAME-GOAL-EXIT-CORNER-003` (`VERIFIED`, see `DEC-008`)
+FASE 21 — README final (`VERIFIED`); corrective maintenance
+`LOOP-AND-SOLVABLE-RESTART-005` (`VERIFIED`, see `DEC-010`)
 
-Active post-plan maintenance: `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` —
+Prior post-plan maintenance: `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` —
 checkpoint A (Textual-safe animation colours and supported sidebar geometry)
 `VERIFIED`; checkpoint C (objective-aware solvability and concrete seed)
 `VERIFIED`; checkpoint D (integration, documentation, and regression)
@@ -94,12 +94,10 @@ rename, merge, or reorder phases.
 
 ## Current blockers
 
-- Final-project audit is `BLOCKERS`: plan sections 106–108 still lack explicit
-  cycle detection, a knowledge-revision-driven replanning trigger, and
-  temporary objective blacklisting; section 109's exploration-rate metric and
-  section 78's complete final summary are also absent. All numbered phases,
-  including FASE 21, are verified, but the project Definition of Done cannot
-  be claimed until these plan requirements have executable evidence.
+- No blocker for `LOOP-AND-SOLVABLE-RESTART-005`. Plan section 109's
+  exploration-rate metric and section 78's complete final summary remain
+  outside this corrective scope; the entire project is therefore not newly
+  declared release-complete by this checkpoint.
 
 ## Known limitations and technical debt
 
@@ -110,10 +108,11 @@ rename, merge, or reorder phases.
 - `confirm_kill`'s soundness-first attribution rule means many kills go
   unattributed in practice on larger, less-explored maps -- intentional
   (sound-but-incomplete), not a defect.
-- A safely disconnected agent with no acceptable risk step rotates in place
-  until knowledge changes or `MAX_TURNS` ends the game. This is deterministic
-  and fail-closed since FASE 15; explicit cycle detection and loop recovery
-  remain later plan work (sections 105-108).
+- A safely disconnected agent now detects four stationary rotations or six
+  non-progress actions, retains knowledge, blocks a failed target for the
+  current knowledge revision, and retries safe/confirmed-Wumpus/least-risk
+  recovery before ending the autonomous run rationally when no agent-legal
+  alternative exists.
 - `AgentMemory` records only the final position observable after a bat chain;
   hidden intermediate teleport destinations are correctly unavailable to it.
 - The final summary remains incomplete for sections 78 and 109: reason,
@@ -131,16 +130,16 @@ rename, merge, or reorder phases.
   exists today; noted by the FASE 18 specification review as a LOW,
   non-blocking observation for future attention if that parameter ever
   becomes load-bearing.
-- The 100-seed stress run reached `TURN_LIMIT` on 4 maps. This is a bounded,
-  plan-defined terminal status rather than a crash; explicit cycle detection,
-  `knowledge_revision`, and objective blacklisting from sections 106-108 remain
-  unimplemented technical debt already documented above.
+- `TURN_LIMIT` remains a technical barrier at 2000 turns. The corrective E2E
+  run uses a 100-turn observation budget and may still classify difficult
+  games as `TURN_LIMIT`, but recorded action histories have no unbounded
+  stationary rotation sequence.
 
 ## Next action
 
-Resolve the final-audit blockers for sections 78 and 106–109 with explicit
-scope authorization (they are not a numbered phase), then add traceability and
-repeat the final audit. Do not declare the repository release-ready yet.
+If release completion is desired, separately resolve plan sections 78 and 109
+and run the final-project audit. No further action is required for this
+corrective maintenance.
 
 ## Post-FASE-20 maintenance
 
@@ -464,6 +463,33 @@ suite, and specification compliance all pass. Commit the state file in the same
 checkpoint as the implementation it describes.
 
 ## Last update
+
+2026-09-26 — `LOOP-AND-SOLVABLE-RESTART-005` verified: the root loop was the
+`Strategy._wait()` fallback clearing any plan and returning `TURN_RIGHT` with
+no semantic-progress state. `AgentMemory` now records a bounded window of
+positions, actions, objectives, and `(position, objective, knowledge_revision)`
+signatures. Four stationary rotations or six non-progress actions emit
+`StagnationEvent`; `Strategy` clears the plan, blocks its failed target for
+the current revision, preserves queued `TURN + MOVE` execution, and follows
+safe frontier, useful Wumpus, least-risk-unconfirmed, and safe-return recovery
+before a bounded rational stop. No agent module imports map-generation or
+solvability code.
+
+The procedural generator now accepts only maps where private BFS reaches at
+least one gold from `[1,1]` without pit, live Wumpus, or bat; the same component
+guarantees return for `CLIMB`. Candidate sampling is bounded at 500 and a
+random constructive fallback retains counts and variation. Restart uses a
+base seed plus index, creates a fresh `World`, and rejects the immediate prior
+layout fingerprint. The exit is `[1,1]`, and `CLIMB` is again the terminal
+action only there when the selected objective is satisfied.
+
+Evidence: 388 tests collected; split complete regression: 279 non-TUI unit
+tests, 66 TUI tile/setup/animation tests, 24 TUI app tests, 17 README,
+integration, and E2E tests, and 2 scaffold tests passed. `compileall -q src main.py` and
+`git diff --check` passed. New directed coverage has 11 cycle/restart/solvable
+generation tests; its 100-seed BFS audit passed. E2E stress over seeds 0–99 at
+100 turns per game completed without crash: 35 `ESCAPED`, 34 `DEAD`, 31
+`TURN_LIMIT`; no unbounded stationary rotation sequence occurred.
 
 2026-09-25 — `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` checkpoint A verified:
 the crash was caused by carrying the Rich cell styles `bright_green`, `yellow`,

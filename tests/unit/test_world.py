@@ -42,7 +42,7 @@ def test_world_starts_at_start_facing_north_with_zero_score() -> None:
     assert world.agent_direction is Direction.NORTH
     assert world.score == 0
     assert world.collected_gold == 0
-    assert world.exit_position == Position(6, 6)
+    assert world.exit_position == Position(1, 1)
     assert world.game_over is False
     assert world.escaped is False
     assert world.dead is False
@@ -164,8 +164,8 @@ def test_grab_collects_and_removes_gold_with_combined_score() -> None:
     assert world.collected_gold == 1
 
 
-def test_climb_never_escapes_from_start_or_elsewhere() -> None:
-    at_start = world_with()
+def test_climb_escapes_only_from_start_when_the_objective_is_satisfied() -> None:
+    at_start = world_with({Position(2, 2): EntityType.GOLD})
     away_from_exit = world_with()
 
     climbed = at_start.execute(Action.CLIMB)
@@ -179,6 +179,13 @@ def test_climb_never_escapes_from_start_or_elsewhere() -> None:
     assert away_from_exit.game_over is False
     assert away_from_exit.score == -2
     assert away_from_exit.last_event == INVALID_CLIMB_EVENT
+
+    fast_escape = World(
+        GeneratedMap(rows=6, cols=6, entities={}),
+        rng=random.Random(0),
+        objective=GameObjective.ESCAPE_FAST,
+    )
+    assert fast_escape.execute(Action.CLIMB).escaped
 
 
 def test_scoring_rules_have_one_canonical_source() -> None:

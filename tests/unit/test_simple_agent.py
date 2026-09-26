@@ -147,7 +147,14 @@ def test_agent_decisions_depend_only_on_the_injected_rng() -> None:
 
 def test_agent_package_never_imports_the_environment_or_hidden_map_types() -> None:
     agent_package = Path(__file__).parents[2] / "src" / "wumpus" / "agent"
-    forbidden_names = {"World", "GeneratedMap", "grid", "entities"}
+    forbidden_names = {
+        "World",
+        "GeneratedMap",
+        "grid",
+        "entities",
+        "is_world_solvable",
+        "solvable_path",
+    }
 
     for module_path in agent_package.glob("*.py"):
         tree = ast.parse(module_path.read_text(encoding="utf-8"))

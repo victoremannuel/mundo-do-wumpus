@@ -21,14 +21,14 @@ def test_final_readme_documents_reproducible_execution_and_test_commands() -> No
     assert "python -m compileall -q src main.py" in readme
 
 
-def test_readme_documents_the_post_plan_exit_and_objective_rules() -> None:
+def test_readme_documents_start_climb_and_soluble_generation_rules() -> None:
     readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
     for required in (
         "[1,1]",
-        "[6,6]",
+        "CLIMB",
         "ESCAPAR O MAIS RÁPIDO POSSÍVEL",
         "COLETAR TODOS OS OUROS ANTES DE ESCAPAR",
-        "saída é automática",
+        "solucionáveis",
     ):
         assert required.casefold() in readme.casefold()
-    assert "vence ao subir (`CLIMB`) em `[1,1]`" not in readme
+    assert "vitória exige `climb` em `[1,1]`" in readme.casefold()
