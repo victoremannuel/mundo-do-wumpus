@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from textual.color import Color
 
 from wumpus.domain import Action, ActionResult, Direction, Perception, Position
 from wumpus.ui.retro_animation import (
@@ -11,8 +12,10 @@ from wumpus.ui.retro_animation import (
     FRAME_COUNTS,
     AnimationController,
     AnimationKind,
+    AnimationEvent,
     build_turn_events,
     build_initial_sensor_events,
+    expand_event,
     expand_events,
     sensors_to_animate,
     shot_path,
@@ -102,6 +105,87 @@ def test_a_blocked_exit_warns_about_pending_gold_without_ending_the_game() -> No
     # A warning flashes and clears; it must never be confused with an escape.
     assert AnimationKind.ESCAPE not in {event.kind for event in events}
     assert len({frame.border_flash for frame in blocked}) > 1
+    assert {style for frame in blocked for _position, style in frame.overlay.cell_flash} == {
+        "bright_green", "yellow", "red"
+    }
+    for frame in blocked:
+        Color.parse(frame.border_flash)
+
+
+def test_blocked_exit_and_breeze_merge_into_textual_safe_concurrent_frames() -> None:
+    result = make_result(
+        exit_blocked=True,
+        perception=Perception(False, True, False, False, False, False),
+    )
+    frames = expand_events(build_turn_events(
+        result,
+        previous_position=Position(1, 1),
+        previous_perception=None,
+        bounds=(6, 6),
+    ))
+
+    combined = [
+        frame for frame in frames
+        if {AnimationKind.EXIT_BLOCKED, AnimationKind.SENSORS}.issubset(frame.kinds)
+    ]
+    assert combined
+    assert any(frame.sensor_phases for frame in combined)
+    for frame in frames:
+        if frame.border_flash is not None:
+            Color.parse(frame.border_flash)
+
+
+def test_every_supported_border_flash_parses_as_a_textual_colour() -> None:
+    events = (
+        AnimationEvent(AnimationKind.INTRO),
+        AnimationEvent(AnimationKind.WUMPUS_KILLED),
+        AnimationEvent(AnimationKind.GRAB, position=Position(2, 2)),
+        AnimationEvent(AnimationKind.TELEPORT, position=Position(2, 2)),
+        AnimationEvent(AnimationKind.BUMP),
+        AnimationEvent(AnimationKind.DEATH, position=Position(2, 2)),
+        AnimationEvent(AnimationKind.ESCAPE, position=Position(6, 6)),
+        AnimationEvent(AnimationKind.EXIT_BLOCKED, position=Position(6, 6)),
+        AnimationEvent(AnimationKind.SENSORS, sensors=("BRISA",)),
+    )
+    frames = [frame for event in events for frame in expand_event(event)]
+    assert frames
+    for frame in frames:
+        if frame.border_flash is not None:
+            Color.parse(frame.border_flash)
+
+
+@pytest.mark.parametrize(
+    "flags",
+    (
+        {"exit_blocked": True},
+        {"gold_collected": True},
+        {"perception": Perception(False, False, False, False, True, False)},
+        {"escaped": True},
+    ),
+)
+def test_representative_action_sensor_merges_preserve_textual_colours(
+    flags: dict[str, object],
+) -> None:
+    values = dict(flags)
+    values["perception"] = Perception(
+        False,
+        True,
+        False,
+        False,
+        "perception" in values,
+        False,
+    )
+    result = make_result(**values)
+    frames = expand_events(build_turn_events(
+        result,
+        previous_position=Position(1, 1),
+        previous_perception=None,
+        bounds=(6, 6),
+    ))
+    assert any(AnimationKind.SENSORS in frame.kinds for frame in frames)
+    for frame in frames:
+        if frame.border_flash is not None:
+            Color.parse(frame.border_flash)
 
 
 def test_the_escape_effect_plays_on_whatever_room_the_result_reports() -> None:

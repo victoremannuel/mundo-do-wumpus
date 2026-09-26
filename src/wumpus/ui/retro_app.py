@@ -25,6 +25,7 @@ from wumpus.ui.retro_animation import (
 from wumpus.ui.retro_map import map_board_height, map_board_width, render_map
 from wumpus.ui.retro_panels import (
     DECISION_TITLES,
+    LEGEND_HEIGHT,
     KNOWN_MAP_TITLE,
     REAL_MAP_TITLE,
     render_agent_status,
@@ -69,8 +70,21 @@ SIDEBAR_WIDTH = 46
 _BORDER_THICKNESS = 2
 MAP_PANEL_WIDTH = map_board_width(6) + _BORDER_THICKNESS
 MAP_PANEL_HEIGHT = map_board_height(6) + _BORDER_THICKNESS
+STATUS_PANEL_HEIGHT = 18
+SENSORS_PANEL_HEIGHT = 8
+# The autonomous decision contains action, target, and reason.  Eight content
+# rows plus the two-row border keeps the complete reasoning panel usable.
+DECISION_MIN_HEIGHT = 10
+LEGEND_PANEL_HEIGHT = LEGEND_HEIGHT + _BORDER_THICKNESS
+SIDEBAR_MIN_HEIGHT = (
+    STATUS_PANEL_HEIGHT
+    + SENSORS_PANEL_HEIGHT
+    + DECISION_MIN_HEIGHT
+    + LEGEND_PANEL_HEIGHT
+)
+GAME_AREA_MIN_HEIGHT = max(MAP_PANEL_HEIGHT, SIDEBAR_MIN_HEIGHT)
 MIN_WIDTH = MAP_PANEL_WIDTH + SIDEBAR_WIDTH
-MIN_HEIGHT = HEADER_HEIGHT + MAP_PANEL_HEIGHT + FOOTER_HEIGHT
+MIN_HEIGHT = HEADER_HEIGHT + GAME_AREA_MIN_HEIGHT + FOOTER_HEIGHT
 DUAL_MAP_MIN_WIDTH = 176
 DUAL_MAP_WITH_SIDEBAR_MIN_WIDTH = 2 * MAP_PANEL_WIDTH + SIDEBAR_WIDTH
 
@@ -126,12 +140,12 @@ class GameScreen(Screen[None]):
     #game-area {{ height: 1fr; layout: horizontal; align: center top; overflow: hidden; }}
     #map-known, #map-real {{ width: {MAP_PANEL_WIDTH}; height: {MAP_PANEL_HEIGHT}; border: round {RETRO_BORDER}; background: {RETRO_BACKGROUND}; overflow: hidden; }}
     #map-real {{ border: round {RETRO_DEBUG}; display: none; }}
-    #sidebar {{ width: {SIDEBAR_WIDTH}; height: {MAP_PANEL_HEIGHT}; layout: vertical; overflow: hidden; }}
+    #sidebar {{ width: {SIDEBAR_WIDTH}; height: {SIDEBAR_MIN_HEIGHT}; layout: vertical; overflow: hidden; }}
     #sidebar Static {{ border: round {RETRO_BORDER}; background: {RETRO_PANEL_BACKGROUND}; padding: 0 1; overflow: hidden; }}
-    #status {{ height: 18; }}
-    #sensors {{ height: 8; }}
-    #decision {{ height: 1fr; }}
-    #legend {{ height: 14; }}
+    #status {{ height: {STATUS_PANEL_HEIGHT}; }}
+    #sensors {{ height: {SENSORS_PANEL_HEIGHT}; }}
+    #decision {{ height: {DECISION_MIN_HEIGHT}; }}
+    #legend {{ height: {LEGEND_PANEL_HEIGHT}; }}
     #endgame {{ height: 1fr; border: double {RETRO_BORDER}; display: none; }}
     #footer {{ height: {FOOTER_HEIGHT}; background: {RETRO_PANEL_BACKGROUND}; color: {RETRO_TEXT_DIM}; }}
     #overlay-too-small {{ layer: overlay; width: 100%; height: 100%; align: center middle; background: {RETRO_BACKGROUND}; display: none; }}
@@ -393,7 +407,6 @@ class GameScreen(Screen[None]):
             board = self.query_one(board_id, PixelMapWidget)
             board.styles.width = width
             board.styles.height = height
-        self.query_one("#sidebar", Vertical).styles.height = height
 
     def _apply_layout(self, width: int | None = None, height: int | None = None) -> None:
         width = self.size.width if width is None else width

@@ -15,6 +15,11 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 FASE 21 — README final (`VERIFIED`); post-plan maintenance
 `GAME-GOAL-EXIT-CORNER-003` (`VERIFIED`, see `DEC-008`)
 
+Active post-plan maintenance: `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` —
+checkpoint A (Textual-safe animation colours and supported sidebar geometry)
+`VERIFIED`; checkpoint C (objective-aware solvability and concrete seed) is
+in progress.
+
 ## Phase ledger
 
 Populate this table from the phase headings in `.specs/plan.md`. Do not invent,
@@ -458,6 +463,21 @@ suite, and specification compliance all pass. Commit the state file in the same
 checkpoint as the implementation it describes.
 
 ## Last update
+
+2026-09-25 — `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` checkpoint A verified:
+the crash was caused by carrying the Rich cell styles `bright_green`, `yellow`,
+and `red` into `AnimationFrame.border_flash`, which is assigned directly to
+Textual `styles.border`. `_exit_blocked_frames` now has separate Rich
+`cell_styles` and Textual hex `border_colours`; every other `border_flash`
+source already uses the `RETRO_BORDER_*` hex palette. Regression coverage
+parses all supported animation frames with `textual.color.Color.parse`, covers
+the real `EXIT_BLOCKED + SENSORS` merge and a real widget border assignment.
+The old sidebar was forced to the 40-row map while its status (18), sensors
+(8), legend (14), and `1fr` decision panel exceeded that budget. Named panel
+constants now reserve status 18, sensors 8, decision 10, and a legend derived
+from `LEGEND_HEIGHT + border` (14): sidebar/game-area minimum is 50 and the
+real terminal `MIN_HEIGHT` is 54 (width remains 118). The directed UI suite
+passed `68`; no fallback catches or animation semantic changes were added.
 
 2026-09-25 — GAME-GOAL-EXIT-CORNER-003 verified: moved the canonical exit from
 the spawn room to the opposite corner, made escape automatic, removed `CLIMB`

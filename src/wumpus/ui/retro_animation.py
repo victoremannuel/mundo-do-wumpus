@@ -474,14 +474,26 @@ def _escape_frames(event: AnimationEvent) -> list[AnimationFrame]:
 
 def _exit_blocked_frames(event: AnimationEvent) -> list[AnimationFrame]:
     position = event.position
-    styles = ("bright_green", "yellow", "red", "bright_green")
+    # Cell overlays are Rich styles, whereas ``AnimationFrame.border_flash`` is
+    # assigned directly to Textual's ``styles.border``.  Keep the two palettes
+    # deliberately separate: a valid Rich style such as ``bright_green`` is not
+    # necessarily a valid Textual colour name.
+    cell_styles = ("bright_green", "yellow", "red", "bright_green")
+    border_colours = (
+        RETRO_BORDER_ESCAPE,
+        RETRO_BORDER_GOLD,
+        RETRO_BORDER_ALERT,
+        RETRO_BORDER_ESCAPE,
+    )
     return [
         _frame(
             AnimationKind.EXIT_BLOCKED,
             banner=BANNER_EXIT_BLOCKED,
-            border_flash=styles[index],
+            border_flash=border_colours[index],
             overlay=MapOverlay(
-                cell_flash=() if position is None else ((position, styles[index]),),
+                cell_flash=(
+                    () if position is None else ((position, cell_styles[index]),)
+                ),
             ),
         )
         for index in range(event.frames)

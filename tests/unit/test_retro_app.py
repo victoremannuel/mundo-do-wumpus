@@ -14,7 +14,9 @@ from typing import Any
 
 import main
 from wumpus.debug.retro_renderer import build_real_map_view
+from wumpus.domain import Action, ActionResult, Direction, Perception, Position
 from wumpus.game import GameEngine, GameStatus
+from wumpus.ui.retro_animation import AnimationKind, build_turn_events, expand_events
 from wumpus.ui.retro_app import (
     DUAL_MAP_MIN_WIDTH,
     DUAL_MAP_WITH_SIDEBAR_MIN_WIDTH,
@@ -296,6 +298,30 @@ def test_a_terminal_below_the_minimum_shows_a_notice_instead_of_crashing() -> No
     drive(scenario, size=(95, 31))
 
 
+def test_minimum_height_contains_legend_and_a_usable_decision_panel() -> None:
+    async def scenario(_pilot: Any, app: RetroGameApp, _engine: GameEngine) -> None:
+        screen = app.screen
+        sidebar = screen.query_one("#sidebar")
+        legend = screen.query_one("#legend", LegendWidget)
+        decision = screen.query_one("#decision", DecisionWidget)
+        assert screen.query_one("#overlay-too-small").display is False
+        assert legend.region.y >= sidebar.content_region.y
+        assert legend.region.bottom <= sidebar.content_region.bottom
+        assert decision.content_region.height > 0
+        assert legend.region.height >= 14
+        board = screen.query_one("#map-known", PixelMapWidget).visual.plain
+        assert board.count("INI") == 1 and board.count("SAI") == 1
+
+    drive(scenario, size=(MIN_WIDTH, MIN_HEIGHT))
+
+
+def test_one_row_below_the_minimum_never_leaves_a_clipped_layout() -> None:
+    async def scenario(_pilot: Any, app: RetroGameApp, _engine: GameEngine) -> None:
+        assert app.screen.query_one("#overlay-too-small").display is True
+
+    drive(scenario, size=(MIN_WIDTH, MIN_HEIGHT - 1))
+
+
 def test_resizing_recovers_the_layout_without_restarting_the_game() -> None:
     async def scenario(pilot: Any, app: RetroGameApp, engine: GameEngine) -> None:
         await pilot.press("n")
@@ -312,6 +338,37 @@ def test_resizing_recovers_the_layout_without_restarting_the_game() -> None:
         assert app.screen.query_one("#overlay-too-small").display is False
         assert engine.turns == turns
         assert app.finished is False
+        assert app.screen.query_one("#map-known", PixelMapWidget).visual.plain
+
+    drive(scenario)
+
+
+def test_a_real_textual_border_assignment_accepts_blocked_exit_with_breeze() -> None:
+    async def scenario(_pilot: Any, app: RetroGameApp, _engine: GameEngine) -> None:
+        result = ActionResult(
+            action=Action.MOVE_FORWARD,
+            position=Position(6, 6),
+            direction=Direction.NORTH,
+            score_delta=-1,
+            total_score=-1,
+            perception=Perception(False, True, False, False, False, False),
+            exit_blocked=True,
+        )
+        screen = app.game_screen
+        assert screen is not None
+        frames = expand_events(build_turn_events(
+            result,
+            previous_position=Position(6, 5),
+            previous_perception=None,
+            bounds=(6, 6),
+        ))
+        combined = next(
+            frame for frame in frames
+            if {AnimationKind.EXIT_BLOCKED, AnimationKind.SENSORS}.issubset(frame.kinds)
+        )
+        screen.animation_controller.enqueue(() )
+        screen._apply_frame_border(combined.border_flash)
+        assert screen.failure is None
 
     drive(scenario)
 
