@@ -1,14 +1,44 @@
 """Regression coverage for GAME-GOAL-EXIT-CORNER-003."""
 
 import random
+from collections import deque
 
 import pytest
 
 import wumpus.environment.world as world_module
 from wumpus.agent import KnowledgeBase, Strategy
 from wumpus.domain import Action, Direction, EntityType, Position
-from wumpus.environment import GeneratedMap, MapGenerationError, MapGenerator, World
+from wumpus.environment import (
+    GeneratedMap,
+    MapGenerationError,
+    MapGenerator,
+    World,
+    is_winnable,
+)
 from wumpus.game import GameConfig, GameObjective, available_entity_cells
+
+
+def independently_reachable(
+    generated: GeneratedMap, config: GameConfig,
+) -> set[Position]:
+    """Small test-only flood fill, intentionally independent of production."""
+
+    start = Position(1, 1)
+    reachable = {start}
+    pending = deque([start])
+    blockers = {EntityType.PIT, EntityType.WUMPUS, EntityType.BAT}
+    while pending:
+        position = pending.popleft()
+        for candidate in position.neighbors():
+            if (
+                not candidate.is_inside(config.rows, config.cols)
+                or candidate in reachable
+                or generated.entity_at(candidate) in blockers
+            ):
+                continue
+            reachable.add(candidate)
+            pending.append(candidate)
+    return reachable
 
 
 def world_2x2(
@@ -45,12 +75,55 @@ def test_generator_keeps_exit_and_initial_zone_empty_for_one_hundred_seeds() -> 
         assert all(cell not in generated.entities for cell in (Position(1, 1), Position(1, 2), Position(2, 1)))
 
 
-def test_generator_accepts_32_but_rejects_33_entities() -> None:
+def test_generator_rejects_capacity_valid_but_structurally_unwinnable_entities() -> None:
     full = GameConfig(wumpus_count=32, pit_count=0, gold_count=0, bat_count=0)
-    assert len(MapGenerator(random.Random(1), full).generate().entities) == 32
+    with pytest.raises(MapGenerationError, match="mapa vencível"):
+        MapGenerator(random.Random(1), full).generate()
     too_many = GameConfig(wumpus_count=33, pit_count=0, gold_count=0, bat_count=0)
     with pytest.raises(MapGenerationError):
         MapGenerator(random.Random(1), too_many).generate()
+
+
+def test_winnability_is_objective_aware_for_an_isolated_gold() -> None:
+    config = GameConfig(rows=5, cols=5)
+    generated = GeneratedMap(
+        rows=5,
+        cols=5,
+        entities={
+            Position(3, 3): EntityType.GOLD,
+            Position(2, 3): EntityType.PIT,
+            Position(3, 2): EntityType.WUMPUS,
+            Position(3, 4): EntityType.BAT,
+            Position(4, 3): EntityType.PIT,
+        },
+    )
+    assert is_winnable(generated, GameObjective.ESCAPE_FAST, config)
+    assert not is_winnable(generated, GameObjective.COLLECT_ALL_GOLD, config)
+
+
+@pytest.mark.parametrize("objective", tuple(GameObjective))
+def test_default_maps_are_winnable_for_one_hundred_seeds(objective: GameObjective) -> None:
+    config = GameConfig()
+    for seed in range(100):
+        generated = MapGenerator(random.Random(seed), config, objective=objective).generate()
+        reachable = independently_reachable(generated, config)
+        assert config.exit_position in reachable
+        if objective is GameObjective.COLLECT_ALL_GOLD:
+            assert all(
+                position in reachable
+                for position, entity in generated.entities.items()
+                if entity is EntityType.GOLD
+            )
+
+
+@pytest.mark.parametrize("objective", tuple(GameObjective))
+def test_same_seed_config_and_objective_reproduce_the_same_map(
+    objective: GameObjective,
+) -> None:
+    config = GameConfig()
+    first = MapGenerator(random.Random(2026), config, objective=objective).generate()
+    second = MapGenerator(random.Random(2026), config, objective=objective).generate()
+    assert first.entities == second.entities
 
 
 def test_fast_escape_is_automatic_and_climb_at_start_never_wins() -> None:

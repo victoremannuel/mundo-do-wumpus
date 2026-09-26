@@ -356,6 +356,52 @@ User authorization of maintenance `GAME-GOAL-EXIT-CORNER-003` on 2026-09-25;
 `tests/unit/test_retro_tiles.py`; `tests/e2e/test_seeded_games.py`;
 `tests/test_readme.py`.
 
+## DEC-009 — Geração objective-aware de mapas estruturalmente vencíveis
+
+Date: 2026-09-25
+Status: ACCEPTED
+Affected phase(s): post-plan maintenance `GAME-RUNTIME-UI-SOLVABILITY-FIX-004`
+(supersedes the non-solvability consequence of DEC-008)
+
+Context:
+DEC-008 intentionally preserved the plan's historical acceptance of difficult
+and possibly impossible random maps. The user has now explicitly prohibited
+starting any structurally impossible match while retaining the agent's partial
+observability and the existing rules.
+
+Decision:
+Every started match has a concrete `effective_seed: int`. A supplied seed is
+kept unchanged; an omitted one is resolved once, then restart reuses it. The
+objective-aware `MapGenerator` validates its private `GeneratedMap.entities`
+with one bounded BFS rule. `ESCAPE_FAST` requires an orthogonal START-to-EXIT
+path through cells without pit, live Wumpus, or bat. `COLLECT_ALL_GOLD`
+requires START, EXIT, and every gold in that same traversable component.
+Bounded rejection sampling accepts the first valid seeded candidate and a
+seeded constructive fallback preserves a connected safe component and exact
+entity counts. A configuration that cannot reserve that component raises
+`MapGenerationError` instead of hanging, changing counts, or starting a map.
+
+Reason:
+This makes the minimum physical solution auditable and deterministic without
+changing sensor, score, arrow, teleport, or engine rules. The generator may
+inspect hidden entities for validation; no component, path, or solution is
+given to `SimpleAgent`, `Strategy`, `Planner`, `RiskEngine`, `KnowledgeBase`,
+or `AgentMemory`.
+
+Consequences:
+Morcego teleport luck and killing a Wumpus are not part of the guarantee. A
+valid map may still defeat a particular autonomous or manual run. Same
+seed/config/objective produces the same accepted map; game mode does not alter
+generation. This replaces DEC-008's acceptance of structurally impossible
+maps while keeping all its exit/objective mechanics.
+
+Evidence:
+User authorization `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` on 2026-09-25;
+`src/wumpus/environment/generator.py::is_winnable`; `main.py::build_game`,
+`build_session`; `tests/unit/test_game_goal_exit.py`;
+`tests/unit/test_game_configuration.py`; stress evidence in
+`.specs/implementation-status.md`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

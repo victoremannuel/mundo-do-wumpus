@@ -1,6 +1,7 @@
 """Central configuration for a Wumpus World game."""
 
 from dataclasses import dataclass
+import secrets
 
 from wumpus.domain import Direction, Position
 
@@ -9,6 +10,21 @@ START_POSITION = Position(1, 1)
 START_DIRECTION = Direction.NORTH
 
 MAX_TURNS = 2000
+
+
+def resolve_effective_seed(seed: int | None) -> int:
+    """Return the concrete seed that identifies one match.
+
+    Gameplay always receives a dedicated ``random.Random(effective_seed)``.
+    ``secrets`` is used only once at the composition boundary when the player
+    did not choose a seed; it is never a gameplay random source.
+    """
+
+    if seed is None:
+        return secrets.randbits(63)
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise TypeError("seed must be an integer or None")
+    return seed
 
 # The rooms the rules keep free of entities so the agent always starts alive and
 # with one legal first move. This is a game rule, not a generation detail, so it

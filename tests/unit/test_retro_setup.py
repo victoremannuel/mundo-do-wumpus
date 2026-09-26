@@ -265,6 +265,10 @@ def test_manual_commands_are_ignored_while_the_previous_action_animates() -> Non
         await pilot.pause(1.0)
         game = app.game_screen
         assert game is not None
+        # Isolate the action animation under test from the independently
+        # scheduled introductory animation, whose wall-clock completion can
+        # vary under a full suite load.
+        game.animation_controller.cancel()
         await pilot.press("left")
         assert game.session.engine.turns == 1
         assert game.animation_controller.busy
@@ -303,6 +307,38 @@ def test_restart_during_animation_cancels_the_old_session_and_preserves_settings
         assert app.game_screen.session.engine.turns == 0
 
     run_scenario(scenario)
+
+
+def test_automatic_seed_is_shown_and_restart_reuses_the_same_map() -> None:
+    app = RetroGameApp(
+        session_factory=main.build_session,
+        seed=None,
+        start_paused=True,
+    )
+
+    async def runner() -> None:
+        async with app.run_test(size=(MIN_WIDTH, MIN_HEIGHT)) as pilot:
+            await pilot.press("2", "4", "enter")
+            await pilot.pause()
+            first = app.game_screen
+            assert first is not None
+            seed = first.session.settings.seed
+            assert isinstance(seed, int)
+            hud = app.screen.query_one("#status").visual.plain
+            assert "SEED" in hud and str(seed) in hud
+            assert first.session.debug_map_source is not None
+            tiles = first.session.debug_map_source().tiles
+
+            await pilot.press("r")
+            app.screen.action_start_game()
+            await pilot.pause()
+            second = app.game_screen
+            assert second is not None
+            assert second.session.settings.seed == seed
+            assert second.session.debug_map_source is not None
+            assert second.session.debug_map_source().tiles == tiles
+
+    asyncio.run(runner())
 
 
 def test_restart_also_works_after_game_over() -> None:

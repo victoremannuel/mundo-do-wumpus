@@ -8,6 +8,7 @@ from wumpus.game.config import (
     available_entity_cells,
     exit_position_for,
     protected_cells,
+    resolve_effective_seed,
 )
 from wumpus.game.engine import GameEngine, GameOutcome, GameStatus
 from wumpus.game.objective import GameObjective, OBJECTIVE_LABELS
@@ -25,4 +26,5 @@ __all__ = (
     "available_entity_cells",
     "exit_position_for",
     "protected_cells",
+    "resolve_effective_seed",
 )

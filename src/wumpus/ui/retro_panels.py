@@ -157,7 +157,7 @@ def render_agent_status(
     turns: int,
     state_label: str,
     speed_label: str,
-    seed: int | None,
+    seed: int,
     debug_enabled: bool,
     mode: GameMode = GameMode.AUTONOMOUS,
     config: GameConfig | None = None,
@@ -194,7 +194,7 @@ def render_agent_status(
         value_style=RETRO_STATUS_STYLES.get(state_label, RETRO_VALUE_STYLE),
     )
     _append_field(text, "VELOC", speed_label)
-    _append_field(text, "SEED", "ALEATÓRIA" if seed is None else str(seed))
+    _append_field(text, "SEED", str(seed))
     _append_field(text, "DEBUG", "ON" if debug_enabled else "OFF")
     return text
 
@@ -264,7 +264,7 @@ def render_footer(
 
 def render_endgame(
     outcome: GameOutcome,
-    seed: int | None,
+    seed: int,
     *,
     mode: GameMode = GameMode.AUTONOMOUS,
     objective: GameObjective = GameObjective.COLLECT_ALL_GOLD,

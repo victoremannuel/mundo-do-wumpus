@@ -29,7 +29,14 @@ from wumpus.agent import HumanAgent, SimpleAgent
 from wumpus.debug.renderer import DebugRenderer
 from wumpus.domain import AgentObservation
 from wumpus.environment import MapGenerator, World
-from wumpus.game import GameConfig, GameEngine, GameObjective, GameOutcome, GameStatus
+from wumpus.game import (
+    GameConfig,
+    GameEngine,
+    GameObjective,
+    GameOutcome,
+    GameStatus,
+    resolve_effective_seed,
+)
 from wumpus.ui.console import ConsoleRenderer
 from wumpus.ui.retro_state import (
     DEFAULT_INTERVAL,
@@ -84,9 +91,10 @@ def build_game(
 ) -> tuple[World, SimpleAgent]:
     """Assemble one real world and one isolated agent from a single seed."""
 
-    rng = random.Random(seed)
+    effective_seed = resolve_effective_seed(seed)
+    rng = random.Random(effective_seed)
     game_config = config if config is not None else GameConfig()
-    generated_map = MapGenerator(rng, game_config).generate()
+    generated_map = MapGenerator(rng, game_config, objective=objective).generate()
     world = World(generated_map, rng=rng, objective=objective)
     agent = SimpleAgent(rng, game_config, objective=objective)
     return world, agent
@@ -100,17 +108,30 @@ def build_session(settings: object) -> object:
 
     if not isinstance(settings, SessionSettings):
         raise TypeError("settings must be SessionSettings")
-    config = settings.config
-    rng = random.Random(settings.seed)
-    generated_map = MapGenerator(rng, config).generate()
-    world = World(generated_map, rng=rng, objective=settings.objective)
+    effective_seed = resolve_effective_seed(settings.seed)
+    effective_settings = (
+        settings
+        if settings.seed == effective_seed
+        else SessionSettings(
+            mode=settings.mode,
+            seed=effective_seed,
+            game_config=settings.game_config,
+            objective=settings.objective,
+        )
+    )
+    config = effective_settings.config
+    rng = random.Random(effective_seed)
+    generated_map = MapGenerator(
+        rng, config, objective=effective_settings.objective
+    ).generate()
+    world = World(generated_map, rng=rng, objective=effective_settings.objective)
 
-    if settings.mode is GameMode.MANUAL:
+    if effective_settings.mode is GameMode.MANUAL:
         agent = HumanAgent(config)
         submitter = agent.queue_action
         clearer = agent.clear_pending_action
     else:
-        agent = SimpleAgent(rng, config, objective=settings.objective)
+        agent = SimpleAgent(rng, config, objective=effective_settings.objective)
         submitter = None
         clearer = None
 
@@ -118,8 +139,8 @@ def build_session(settings: object) -> object:
         engine=GameEngine(world, agent),
         presentation_source=agent,
         initial_observation=world.observation(),
-        mode=settings.mode,
-        settings=settings,
+        mode=effective_settings.mode,
+        settings=effective_settings,
         debug_map_source=lambda: build_real_map_view(world.debug_snapshot()),
         manual_action_submitter=submitter,
         manual_action_clearer=clearer,

@@ -17,8 +17,9 @@ FASE 21 — README final (`VERIFIED`); post-plan maintenance
 
 Active post-plan maintenance: `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` —
 checkpoint A (Textual-safe animation colours and supported sidebar geometry)
-`VERIFIED`; checkpoint C (objective-aware solvability and concrete seed) is
-in progress.
+`VERIFIED`; checkpoint C (objective-aware solvability and concrete seed)
+`VERIFIED`; checkpoint D (integration, documentation, and regression)
+`VERIFIED`.
 
 ## Phase ledger
 
@@ -478,6 +479,37 @@ constants now reserve status 18, sensors 8, decision 10, and a legend derived
 from `LEGEND_HEIGHT + border` (14): sidebar/game-area minimum is 50 and the
 real terminal `MIN_HEIGHT` is 54 (width remains 118). The directed UI suite
 passed `68`; no fallback catches or animation semantic changes were added.
+
+2026-09-25 — `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` checkpoint C verified:
+every session freezes an `effective_seed: int`; explicit values are retained,
+automatic values are resolved once, shown in the HUD, and reused by restart.
+`MapGenerator` now receives `GameObjective` and owns the only private BFS
+solvability validator: `ESCAPE_FAST` reaches the exit through cells without
+pit/Wumpus/bat, and `COLLECT_ALL_GOLD` additionally reaches every gold in that
+same component. The generator accepts the first valid seeded candidate within
+256 attempts, then uses a seeded constructive connected-component fallback;
+an impossible hazard capacity raises `MapGenerationError` in Portuguese with
+no altered count, alternate seed, partial map, or unbounded loop. The real
+composition roots (`build_game`, `build_session`) pass the selected objective;
+the UI and agent-facing types receive neither a map component nor a solution.
+Directed generation/setup tests passed `75`. The separate 1,000-seed stress
+for each objective reported `UNWINNABLE=0`, `EXCEPTIONS=0`, `OVERLAPS=0`,
+`COUNT_ERRORS=0`, and `PROTECTED_CELL_ERRORS=0`; reproduction for seeds
+1/2/3/10/20/42/100/123/999/2026 was `10/10` for each objective.
+
+2026-09-25 — `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` checkpoint D verified:
+README documents concrete/reproducible seeds and objective-specific map
+solvability without promising an agent win. The complete regression passed
+`378`; `.venv/bin/python -m compileall -q src main.py` exited 0; focused
+anti-cheat/README coverage passed `21`; `git diff --check` is clean. The
+real Textual widget smoke assigns the merged `EXIT_BLOCKED + SENSORS` frame to
+`styles.border` without `ColorParseError`, `StyleValueError`, or a screen
+failure; the minimum-size/resize tests prove legend, decision, start, exit,
+and preserved map/turn/seed state. A PTY launch of
+`.venv/bin/python main.py --seed 42` reached the setup screen and exited with
+no traceback. Ruff is not configured/installed, so no Ruff result is claimed.
+No `GameEngine`, scoring, sensors, arrow, teleport, agent, strategy, planner,
+or risk implementation was modified.
 
 2026-09-25 — GAME-GOAL-EXIT-CORNER-003 verified: moved the canonical exit from
 the spawn room to the opposite corner, made escape automatic, removed `CLIMB`

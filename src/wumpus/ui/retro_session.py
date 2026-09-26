@@ -19,7 +19,7 @@ from dataclasses import dataclass, replace
 from enum import Enum, auto
 
 from wumpus.domain import Action, AgentObservation
-from wumpus.game.config import GameConfig, available_entity_cells
+from wumpus.game.config import GameConfig, available_entity_cells, resolve_effective_seed
 from wumpus.game.engine import GameEngine
 from wumpus.game.objective import GameObjective
 from wumpus.ui.retro_state import AgentPresentationSource, MapView
@@ -51,6 +51,11 @@ class SessionSettings:
     seed: int | None = None
     game_config: GameConfig | None = None
     objective: GameObjective = GameObjective.COLLECT_ALL_GOLD
+
+    def __post_init__(self) -> None:
+        """Freeze a concrete identity before a session is assembled."""
+
+        object.__setattr__(self, "seed", resolve_effective_seed(self.seed))
 
     @property
     def config(self) -> GameConfig:

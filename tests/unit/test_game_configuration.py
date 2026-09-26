@@ -8,7 +8,7 @@ import pytest
 import main
 from wumpus.domain import EntityType
 from wumpus.environment import MapGenerationError, MapGenerator
-from wumpus.game import GameConfig
+from wumpus.game import GameConfig, GameObjective
 from wumpus.ui.retro_session import GameMode, SessionSettings, validate_cave
 
 
@@ -46,3 +46,18 @@ def test_session_factory_selects_the_requested_agent_contract() -> None:
     autonomous = main.build_session(SessionSettings(GameMode.AUTONOMOUS, 42, GameConfig()))
     assert manual.manual_action_submitter is not None
     assert autonomous.manual_action_submitter is None
+
+
+def test_automatic_session_seed_is_concrete_and_restart_replays_the_map() -> None:
+    settings = SessionSettings(
+        GameMode.MANUAL,
+        None,
+        GameConfig(),
+        objective=GameObjective.COLLECT_ALL_GOLD,
+    )
+    assert isinstance(settings.seed, int)
+    first = main.build_session(settings)
+    second = main.build_session(settings)
+    assert first.settings.seed == settings.seed == second.settings.seed
+    assert first.debug_map_source is not None and second.debug_map_source is not None
+    assert first.debug_map_source().tiles == second.debug_map_source().tiles
