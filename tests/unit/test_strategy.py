@@ -4,6 +4,7 @@ import wumpus.agent.strategy as strategy_module
 from wumpus.agent import DecisionReason, KnowledgeBase, Strategy
 from wumpus.domain import Action, ActionResult, Direction, EntityType, Perception, Position
 from wumpus.game.config import START_POSITION
+from wumpus.game.objective import GameObjective
 
 
 def shot_result(
@@ -748,3 +749,115 @@ def test_strategy_never_treats_a_confirmed_danger_cell_as_a_risk_candidate() -> 
     )
 
     assert action is Action.TURN_RIGHT
+
+
+def test_fast_escape_grabs_glitter_from_a_route_already_in_progress() -> None:
+    """Reproduces FAST-ESCAPE-INCIDENTAL-GOLD-012 (DEC-012): a cached,
+    still-valid escape route must not be blindly advanced past gold the
+    agent has just walked onto -- GRAB must preempt the queued action."""
+
+    knowledge = KnowledgeBase(3, 3)
+    for cell in (Position(1, 1), Position(2, 1), Position(3, 1), Position(3, 2), Position(3, 3)):
+        knowledge.mark_safe(cell)
+    knowledge.mark_visited(Position(1, 1))
+    strategy = Strategy(total_gold=1, objective=GameObjective.ESCAPE_FAST, exit_position=Position(3, 3))
+
+    first = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+    assert first is Action.MOVE_FORWARD
+    assert strategy.current_target == Position(3, 3)
+    assert strategy.planned_actions  # a multi-step route is cached
+
+    # The environment moves the agent into the next room of that same route,
+    # which happens to hold gold. The already-queued action must not be
+    # consumed before GRAB.
+    queued_next_action = strategy.planned_actions[0]
+    second = strategy.decide(
+        knowledge=knowledge,
+        position=Position(2, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=True,
+    )
+
+    assert second is Action.GRAB
+    assert second is not queued_next_action
+    assert strategy.last_reason == DecisionReason(
+        Action.GRAB, "Brilho percebido: coletando ouro", Position(2, 1)
+    )
+    # The stale route is discarded rather than resumed blindly.
+    assert strategy.current_target is None
+    assert strategy.planned_actions == ()
+
+
+def test_fast_escape_resumes_rationally_toward_the_exit_after_the_grab() -> None:
+    """After the incidental GRAB, ESCAPE_FAST recalculates toward the exit
+    and does not start looking for further gold (DEC-012)."""
+
+    knowledge = KnowledgeBase(3, 3)
+    for cell in (Position(1, 1), Position(2, 1), Position(3, 1), Position(3, 2), Position(3, 3)):
+        knowledge.mark_safe(cell)
+    knowledge.mark_visited(Position(1, 1))
+    strategy = Strategy(total_gold=1, objective=GameObjective.ESCAPE_FAST, exit_position=Position(3, 3))
+
+    strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+    strategy.decide(
+        knowledge=knowledge,
+        position=Position(2, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=True,
+    )
+
+    # The world has removed the gold; the room no longer glitters.
+    action = strategy.decide(
+        knowledge=knowledge,
+        position=Position(2, 1),
+        direction=Direction.NORTH,
+        collected_gold=1,
+        glitter=False,
+    )
+
+    assert action is Action.MOVE_FORWARD
+    assert strategy.current_target == Position(3, 3)
+
+
+def test_fast_escape_without_glitter_is_unaffected_by_the_grab_preemption() -> None:
+    """The glitter preemption must not change ESCAPE_FAST when no glitter is
+    perceived: same target, same route-continuation behavior as before."""
+
+    knowledge = KnowledgeBase(3, 3)
+    for cell in (Position(1, 1), Position(2, 1), Position(3, 1), Position(3, 2), Position(3, 3)):
+        knowledge.mark_safe(cell)
+    knowledge.mark_visited(Position(1, 1))
+    strategy = Strategy(total_gold=1, objective=GameObjective.ESCAPE_FAST, exit_position=Position(3, 3))
+
+    first = strategy.decide(
+        knowledge=knowledge,
+        position=Position(1, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+    second = strategy.decide(
+        knowledge=knowledge,
+        position=Position(2, 1),
+        direction=Direction.NORTH,
+        collected_gold=0,
+        glitter=False,
+    )
+
+    assert first is Action.MOVE_FORWARD
+    assert second is Action.MOVE_FORWARD
+    assert strategy.current_target == Position(3, 3)

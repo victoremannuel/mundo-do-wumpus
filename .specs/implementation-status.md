@@ -15,7 +15,9 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 FASE 21 — README final (`VERIFIED`); corrective maintenance
 `LOOP-AND-SOLVABLE-RESTART-005` (`VERIFIED`, see `DEC-010`); corrective
 maintenance `EXIT-CORNER-RESTORE` (`VERIFIED`, see `DEC-011`, supersedes the
-exit-rule and solvability parts of `DEC-010`)
+exit-rule and solvability parts of `DEC-010`); corrective maintenance
+`FAST-ESCAPE-INCIDENTAL-GOLD-012` (`VERIFIED`, see `DEC-012`, supersedes only
+the "deliberately skips glitter" consequence of `DEC-008`)
 
 Prior post-plan maintenance: `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` —
 checkpoint A (Textual-safe animation colours and supported sidebar geometry)
@@ -465,6 +467,60 @@ suite, and specification compliance all pass. Commit the state file in the same
 checkpoint as the implementation it describes.
 
 ## Last update
+
+2026-09-26 — `FAST-ESCAPE-INCIDENTAL-GOLD-012` (`DEC-012`) verified: root
+cause was that `Strategy.decide()` reused an already-valid cached movement
+plan (`self._target`/`self._path`/`self._actions`) before either objective
+branch could react to the current room's `glitter`, so a route already in
+progress could advance past a glittering room untouched; `_decide_fast_escape`
+also never received `glitter` at all. `ESCAPE_FAST` now grabs incidental gold
+in the room it currently occupies without searching for or detouring toward
+gold, exactly as the user specified: it never becomes `COLLECT_ALL_GOLD`.
+
+Behavior: the `glitter` check moved to the top of `Strategy.decide()`, ahead
+of the cached-plan reuse short-circuit and ahead of recovery/objective
+dispatch, so it is now a single, centralized precondition for every
+objective instead of a check duplicated inside `_decide_collect_all` only.
+On `GRAB`, the stale plan is discarded (`self._clear()`); the next `decide()`
+call recomputes a fresh BFS route toward the exit deterministically, the same
+way any other replanning event already works. The decision still reads only
+`observation.perception.glitter`; no map, grid, or hidden entity position was
+touched.
+
+Files changed: `src/wumpus/agent/strategy.py` (moved/centralized the glitter
+check in `decide()`; removed the now-redundant glitter branch and parameter
+from `_decide_collect_all`); `tests/unit/test_strategy.py` (three new tests);
+`tests/unit/test_game_goal_exit.py` (rewrote the test that encoded the old
+skip-glitter rule); `tests/integration/test_known_maps.py` (new real-stack
+regression, plus an `objective` parameter on the shared `run_known_map`
+helper); `.specs/decisions.md` (`DEC-012`); `.specs/traceability.md`; `README.md`.
+
+Tests: `.venv/bin/python -m pytest tests/unit/test_strategy.py
+tests/unit/test_game_goal_exit.py -q` — 53 passed;
+`.venv/bin/python -m pytest tests/unit/test_simple_agent.py
+tests/unit/test_engine.py tests/unit/test_world.py tests/unit/test_planner.py
+tests/unit/test_cycle_recovery.py tests/unit/test_game_goal_exit.py
+tests/unit/test_strategy.py -q` — 127 passed;
+`.venv/bin/python -m pytest tests/integration -q` — 3 passed;
+`.venv/bin/python -m pytest tests/e2e/test_seeded_games.py -q` — 12 passed;
+full suite `.venv/bin/python -m pytest -q` — 429 passed (425 pre-existing plus
+4 new); `python -m compileall -q src main.py` exited 0; `git diff --check`
+clean.
+
+Regression: the two new cached-route tests
+(`test_fast_escape_grabs_glitter_from_a_route_already_in_progress`,
+and the real-stack `test_real_escape_fast_agent_grabs_incidental_gold_along_its_own_route`)
+were confirmed to fail against the pre-fix `strategy.py` (both returned
+`Action.MOVE_FORWARD` instead of `Action.GRAB`/`collected_gold == 0`) and pass
+after it. A deterministic 600-run stress sample (300 seeds × `ESCAPE_FAST` and
+`COLLECT_ALL_GOLD`, `max_turns=500`, real `build_game`/`GameEngine` stack)
+completed with 0 exceptions and only 3 `TURN_LIMIT` outcomes (all in
+`COLLECT_ALL_GOLD`, none in `ESCAPE_FAST`), evidence against a
+`GRAB`/replan cycle. `DEC-011` invariants (far-corner exit, no `TURN_LEFT`,
+solvability, the initial 2x2 safe zone) were re-verified unchanged by the
+directed and full regression runs above; no scoring constant changed.
+
+Next action: none for this corrective scope.
 
 2026-09-26 — `EXIT-CORNER-RESTORE` (`DEC-011`) verified: root cause of the
 immediate-escape regression was `LOOP-AND-SOLVABLE-RESTART-005` deliberately

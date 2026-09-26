@@ -201,12 +201,15 @@ def safe_knowledge() -> KnowledgeBase:
     return knowledge
 
 
-def test_strategy_fast_ignores_glitter_but_collect_all_grabs_it() -> None:
+def test_strategy_fast_and_collect_all_both_grab_incidental_glitter() -> None:
+    """DEC-012: ESCAPE_FAST never searches for gold, but it must not walk past
+    gold in the room it currently occupies -- exactly like COLLECT_ALL_GOLD."""
+
     knowledge = safe_knowledge()
     fast = Strategy(total_gold=1, objective=GameObjective.ESCAPE_FAST, exit_position=Position(3, 3))
     collect = Strategy(total_gold=1, objective=GameObjective.COLLECT_ALL_GOLD, exit_position=Position(3, 3))
     kwargs = dict(knowledge=knowledge, position=Position(1, 1), direction=Direction.NORTH, collected_gold=0, glitter=True)
-    assert fast.decide(**kwargs) is not Action.GRAB
+    assert fast.decide(**kwargs) is Action.GRAB
     assert collect.decide(**kwargs) is Action.GRAB
 
 
