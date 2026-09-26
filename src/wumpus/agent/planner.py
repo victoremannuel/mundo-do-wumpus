@@ -15,8 +15,6 @@ _RIGHT_TURN = {
     Direction.WEST: Direction.NORTH,
 }
 
-_LEFT_TURN = {result: source for source, result in _RIGHT_TURN.items()}
-
 FORWARD_DELTA = {
     Direction.NORTH: (1, 0),
     Direction.EAST: (0, 1),
@@ -93,12 +91,16 @@ def plan_actions(path: list[Position], direction: Direction) -> deque[Action]:
 
 
 def turns_to_face(current: Direction, target: Direction) -> tuple[Action, ...]:
-    """Return the 0-2 turn actions that reorient one facing onto another."""
+    """Return the 0-3 `TURN_RIGHT` actions that reorient one facing onto another.
+
+    `TURN_LEFT` is not a canonical action: a 90-degree left turn is expressed
+    as three real `TURN_RIGHT` actions, each costing its own action point.
+    """
 
     if current == target:
         return ()
     if _RIGHT_TURN[current] == target:
         return (Action.TURN_RIGHT,)
-    if _LEFT_TURN[current] == target:
-        return (Action.TURN_LEFT,)
-    return (Action.TURN_RIGHT, Action.TURN_RIGHT)
+    if _RIGHT_TURN[_RIGHT_TURN[current]] == target:
+        return (Action.TURN_RIGHT, Action.TURN_RIGHT)
+    return (Action.TURN_RIGHT, Action.TURN_RIGHT, Action.TURN_RIGHT)

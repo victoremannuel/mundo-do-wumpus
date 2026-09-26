@@ -39,7 +39,7 @@ def rotation_event(actions: tuple[Action, ...]) -> StagnationEvent:
 
 
 def test_four_rotations_without_progress_emit_cycle_detected() -> None:
-    event = rotation_event((Action.TURN_LEFT,) * 4)
+    event = rotation_event((Action.TURN_RIGHT,) * 4)
 
     assert event.position == START
     assert event.objective == TARGET
@@ -47,12 +47,20 @@ def test_four_rotations_without_progress_emit_cycle_detected() -> None:
     assert event.turns_without_progress == 4
 
 
-def test_alternating_rotations_are_detected() -> None:
-    event = rotation_event(
-        (Action.TURN_LEFT, Action.TURN_RIGHT, Action.TURN_LEFT, Action.TURN_RIGHT)
-    )
+def test_a_legitimate_three_turn_right_left_turn_is_not_flagged_as_a_cycle() -> None:
+    """A 90-degree left turn is three real TURN_RIGHT actions (no TURN_LEFT).
 
-    assert event.rotations == 4
+    Three consecutive rotations must stay below the stagnation threshold so a
+    legitimate left-turn sequence is never misclassified as a loop.
+    """
+
+    agent_memory = memory()
+    event = None
+    for action in (Action.TURN_RIGHT,) * 3:
+        agent_memory.begin_action(TARGET)
+        agent_memory.record_result(result(action))
+        event = agent_memory.finish_action(result(action))
+    assert event is None
 
 
 def test_repeated_right_rotations_are_detected() -> None:
@@ -66,7 +74,7 @@ def test_recovery_clears_plan_and_temporarily_blocks_its_target() -> None:
     strategy._target = TARGET
     strategy._path = [START, TARGET]
     strategy._actions = deque((Action.TURN_RIGHT, Action.MOVE_FORWARD))
-    event = rotation_event((Action.TURN_LEFT,) * 4)
+    event = rotation_event((Action.TURN_RIGHT,) * 4)
 
     strategy.recover_from_stagnation(event)
 

@@ -438,6 +438,81 @@ Evidence:
 `src/wumpus/environment/generator.py`; `main.py`; `tests/unit/test_solvable_generation_restart.py`;
 `tests/unit/test_cycle_recovery.py`.
 
+## DEC-011 — The exit returns to the far corner; TURN_LEFT is removed; solvability covers the exit and every gold
+
+Date: 2026-09-26
+Status: ACCEPTED
+Affected phase(s): corrective maintenance — domain, environment, agent, generation, UI
+(supersedes the exit-rule and solvability consequences of DEC-010; restores
+and strengthens DEC-008/DEC-009)
+
+Context:
+`DEC-010` restored `[1,1]` as both spawn and exit so its own corrective
+maintenance (loop/cycle breaking) could ship without touching the far-corner
+exit design. The user has now explicitly authorized reversing that specific
+regression: `[1,1]` must never end the match, `[6,6]` must be the only valid
+`CLIMB` room, `TURN_LEFT` must not exist as a canonical action, and every
+generated map's structural solvability must cover both the exit and every
+configured gold, not gold alone.
+
+Decision:
+`exit_position_for(rows, cols)` returns `Position(rows, cols)` again;
+`SAFE_INITIAL_CELLS` gains `[2,2]`, and `protected_cells` again unions the
+safe zone with the exit. `Action` drops `TURN_LEFT`; every 90-degree left turn
+is expressed as three real `TURN_RIGHT` actions (`planner.turns_to_face`),
+each independently costed and each capable of ending a plan early if the game
+ends mid-turn. `MapGenerator.is_world_solvable` now requires a single private
+BFS component from `[1,1]` (blocked by pit, live Wumpus, and bat) that
+contains both `exit_position_for(...)` and every gold room; the random and
+constructive-fallback paths both grow that same component before placing
+hazards.
+
+Reason:
+This is the corrective, surgical reversal the user requested: the cave must
+be traversed to win, a canonical action set must not carry a redundant
+rotation, and "solvable" must mean the whole match (reach every gold, then
+the exit) rather than only "some gold is reachable". Anti-loop stagnation
+detection (`MAX_CONSECUTIVE_ROTATIONS = 4`) is unchanged and untouched by this
+decision: three real `TURN_RIGHT` actions for one left turn stay below that
+threshold, so a legitimate left turn is never misclassified as a cycle.
+
+Consequences:
+`available_entity_cells(6, 6)` drops from 33 to 31 (five protected rooms
+instead of three); `available_entity_cells(2, 2)` becomes 0. Any code, UI
+text, or test that assumed `exit == start` or that referenced `TURN_LEFT`
+needed a corresponding update; none of the canonical entity counts (2 Wumpus,
+4 pits, 3 gold, 2 bats), score values, sensor rules, or the RNG/seed-sequence
+contract changed.
+
+`_safe_component_for_route`'s first implementation seeded its growth from the
+full `protected_cells` set, which contains two cells (the start cluster and
+the far-corner exit) that are not adjacent on the grid; unbiased frontier
+growth could then expand around either seed without ever bridging them,
+occasionally producing a map where the exit was structurally unreachable from
+start under a hazard-dense config even though `is_world_solvable` correctly
+rejected it (the bug was in *construction*, not in the *validator*, which is
+why it surfaced as a `MapGenerationError`/`AssertionError` failure rate under
+a tight adversarial config rather than a silently-accepted broken map). The
+fix builds a short randomized monotonic shortest path from `[1,1]` to the
+exit first (`_monotonic_route`), unions it with `protected_cells`, and only
+then grows the component for spare gold slots -- guaranteeing connectivity by
+construction instead of by chance. A directed regression test
+(`test_a_hazard_dense_config_stays_winnable_across_many_seeds`,
+`test_constructive_fallback_alone_guarantees_exit_and_gold_reachability`)
+uses a hazard-dense 6x6 config (16 hazards + 3 gold of 31 available cells)
+specifically because the spacious canonical default (8 hazards) reached the
+far corner by chance often enough to mask this defect in earlier stress runs.
+
+Evidence:
+User-authorized mission "MISSÃO CORRETIVA E2E CIRÚRGICA" on 2026-09-26;
+`src/wumpus/game/config.py`; `src/wumpus/domain/enums.py`;
+`src/wumpus/agent/planner.py`; `src/wumpus/environment/{actions,world}.py`;
+`src/wumpus/environment/generator.py`; `src/wumpus/game/scoring.py`;
+`src/wumpus/agent/memory.py`; `src/wumpus/ui/{retro_animation,retro_app,retro_panels}.py`;
+full regression suite (`pytest -q`); `tests/unit/test_game_goal_exit.py`;
+`tests/unit/test_world.py`; `tests/unit/test_cycle_recovery.py`;
+`tests/unit/test_planner.py`; `tests/unit/test_solvable_generation_restart.py`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

@@ -209,7 +209,7 @@ class World:
 
         if action is Action.MOVE_FORWARD:
             teleported, exit_blocked = self._move_forward()
-        elif action in (Action.TURN_RIGHT, Action.TURN_LEFT):
+        elif action is Action.TURN_RIGHT:
             self._agent_direction = rotated(self._agent_direction, action)
         elif action is Action.GRAB:
             gold_collected = self._grab_gold()

@@ -23,7 +23,6 @@ def test_domain_enums_have_the_plan_defined_members() -> None:
     assert [member.name for member in Action] == [
         "MOVE_FORWARD",
         "TURN_RIGHT",
-        "TURN_LEFT",
         "GRAB",
         "SHOOT",
         "CLIMB",

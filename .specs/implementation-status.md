@@ -13,7 +13,9 @@ Allowed values: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `IMPLEMENTED`,
 ## Current phase
 
 FASE 21 — README final (`VERIFIED`); corrective maintenance
-`LOOP-AND-SOLVABLE-RESTART-005` (`VERIFIED`, see `DEC-010`)
+`LOOP-AND-SOLVABLE-RESTART-005` (`VERIFIED`, see `DEC-010`); corrective
+maintenance `EXIT-CORNER-RESTORE` (`VERIFIED`, see `DEC-011`, supersedes the
+exit-rule and solvability parts of `DEC-010`)
 
 Prior post-plan maintenance: `GAME-RUNTIME-UI-SOLVABILITY-FIX-004` —
 checkpoint A (Textual-safe animation colours and supported sidebar geometry)
@@ -94,7 +96,7 @@ rename, merge, or reorder phases.
 
 ## Current blockers
 
-- No blocker for `LOOP-AND-SOLVABLE-RESTART-005`. Plan section 109's
+- No blocker for `LOOP-AND-SOLVABLE-RESTART-005` or `EXIT-CORNER-RESTORE`. Plan section 109's
   exploration-rate metric and section 78's complete final summary remain
   outside this corrective scope; the entire project is therefore not newly
   declared release-complete by this checkpoint.
@@ -463,6 +465,105 @@ suite, and specification compliance all pass. Commit the state file in the same
 checkpoint as the implementation it describes.
 
 ## Last update
+
+2026-09-26 — `EXIT-CORNER-RESTORE` (`DEC-011`) verified: root cause of the
+immediate-escape regression was `LOOP-AND-SOLVABLE-RESTART-005` deliberately
+setting `exit_position_for(rows, cols)` to return `START_POSITION` (recorded
+in `DEC-010`), so `[1,1]` was both spawn and exit and `CLIMB` won on turn one.
+`config.py::exit_position_for` now returns `Position(rows, cols)` again;
+`SAFE_INITIAL_CELLS` gained `[2,2]`; `protected_cells` again unions the safe
+zone with the exit (31 available cells on the canonical 6x6 map, down from
+the regression's 33). `Action.TURN_LEFT` was removed from the canonical enum;
+`planner.turns_to_face` now returns three `TURN_RIGHT` actions for a 90-degree
+left turn, and every other consumer (`environment/actions.py::rotated`,
+`environment/world.py::execute`, `game/scoring.py`, `agent/memory.py`
+rotation classification, `ui/retro_animation.py`, `ui/retro_app.py`'s manual
+"turn left" key) was updated to match; the manual key now drives three real
+engine turns of `TURN_RIGHT`, naturally capped to one by the existing
+animation-busy guard. `MapGenerator.is_world_solvable` was rewritten from
+"some gold is reachable" to "the exit and every configured gold are all in
+one BFS component from `[1,1]`, blocked by pit/live Wumpus/bat"; both the
+random-sample and constructive-fallback generation paths now grow that same
+component (`_safe_component_for_route`) before placing hazards, so every
+accepted map guarantees a real route to every gold and back to `[6,6]`.
+`MAX_CONSECUTIVE_ROTATIONS = 4` needed no change: a legitimate left turn is
+exactly 3 rotations, which stays below the stagnation threshold, so it is
+never misclassified as a cycle; a directed regression test now proves this
+explicitly alongside the existing 4-rotation cycle-detection test.
+
+An independent `spec-guardian` review and a `logic-reviewer` review were run
+in parallel against this change before the checkpoint. Both returned no
+blockers for the code; `spec-guardian` additionally flagged that
+`.specs/plan.md` sections 5 and 102 still narrate `[1,1]` as the exit/CLIMB
+room. That file carries an explicit `deny` rule in
+`.claude/settings.json` (`"Edit(/.specs/plan.md)"`), a standing project
+guardrail that outranks this session's own mission text asking for a
+surgical plan edit; the supersession is instead recorded in full in
+`DEC-011`/`DEC-008`, consistent with the project's established convention of
+never rewriting `.specs/plan.md` to match later code.
+
+`logic-reviewer` additionally suggested a generator test that forces the
+constructive fallback under an adversarial, hazard-dense config -- writing it
+(`tests/unit/test_generator.py::test_a_hazard_dense_config_stays_winnable_across_many_seeds`,
+`::test_constructive_fallback_alone_guarantees_exit_and_gold_reachability`,
+6x6 with 16 hazards + 3 gold of 31 available cells) surfaced a real defect in
+this same session's own `_safe_component_for_route`: seeding growth from the
+full `protected_cells` set (which contains two grid-adjacent-but-not-mutually-
+adjacent seeds, the start cluster and the far exit) let unbiased frontier
+growth wander around either seed without ever bridging them, so a hazard-dense
+map could end up with the exit structurally unreachable from start. The fix
+adds `_monotonic_route` -- a short randomized shortest path from `[1,1]` to
+the exit -- and unions it into the growing component before the existing
+gold-slot growth runs, guaranteeing connectivity by construction. See
+`DEC-011`'s addendum for the full root-cause narrative.
+
+Evidence: full regression `425 passed` (0 failed) after the generator fix and
+the corresponding README-contract test update
+(`tests/test_readme.py::test_readme_documents_start_climb_and_soluble_generation_rules`
+now expects `` `climb` em `[6,6]` `` instead of the stale `[1,1]`);
+`.venv/bin/python -m compileall -q src main.py` exited 0. A 300-map private
+BFS audit (150 seeds x 2 objectives, spacious default config) found `0/300`
+unsolvable maps for either objective; a separate 500-seed audit of the
+hazard-dense tight config (post-fix) found `0/500` unsolvable. A 300-game
+real-stack E2E stress run (150 seeds x 2 objectives, `main.py::build_game` +
+`GameEngine`, `max_turns=2000`, pre-dating the generator connectivity fix but
+re-verified unaffected by it since the default config was never actually
+exposed to the bug) found `0` exceptions and `0` invalid escapes (an invalid
+escape being `escaped=True` while `agent_position != exit_position`, or an
+`ESCAPED` result after a single turn at `[1,1]`); outcome distribution was
+`ESCAPE_FAST: {ESCAPED: 82, DEAD: 64, ABANDONED: 4}`, `COLLECT_ALL_GOLD:
+{ESCAPED: 49, DEAD: 95, ABANDONED: 5, TURN_LIMIT: 1}`. Seed 42 was replayed
+directly for both objectives: `ESCAPE_FAST` escapes at `[6,6]` in 36 turns
+(score -36), `COLLECT_ALL_GOLD` escapes at `[6,6]` in 88 turns (score 2912);
+neither ends at `[1,1]`. `.specs/plan.md` was not modified (see the
+`deny`-rule note above); `.specs/decisions.md` gained `DEC-011`, which
+explicitly supersedes the exit-rule and solvability consequences of `DEC-010`
+while leaving its loop-prevention memory/strategy mechanics untouched.
+`LogicalAgent`/`Strategy`/`Planner` continue to receive zero references to
+`World`, the real map, `is_world_solvable`, or any generator-internal path or
+component -- confirmed by re-running the existing anti-cheat import-boundary
+tests, which pass unchanged, and independently re-confirmed by both review
+subagents via static import audits.
+
+Files changed: `src/wumpus/game/config.py`; `src/wumpus/domain/enums.py`;
+`src/wumpus/agent/planner.py`; `src/wumpus/environment/actions.py`;
+`src/wumpus/environment/world.py`; `src/wumpus/environment/generator.py`;
+`src/wumpus/game/scoring.py`; `src/wumpus/agent/memory.py`;
+`src/wumpus/ui/retro_animation.py`; `src/wumpus/ui/retro_app.py`;
+`src/wumpus/ui/retro_panels.py`; `README.md`; `.specs/decisions.md`;
+`.specs/traceability.md`; and the following test files updated for the
+restored exit and the canonical action set: `tests/unit/test_domain.py`,
+`test_world.py`, `test_engine.py`, `test_game_goal_exit.py`,
+`test_game_configuration.py`, `test_human_agent.py`, `test_planner.py`,
+`test_memory.py`, `test_strategy.py`, `test_simple_agent.py`,
+`test_cycle_recovery.py`, `test_retro_setup.py`, `test_retro_app.py`,
+`test_retro_tiles.py`, `test_solvable_generation_restart.py`,
+`test_generator.py`, `tests/integration/test_known_maps.py`,
+`tests/test_readme.py`.
+
+No blocker for `EXIT-CORNER-RESTORE`. As before, plan sections 78 and 106-109
+(complete final summary, exploration-rate metric) remain outside this
+corrective scope.
 
 2026-09-26 — `LOOP-AND-SOLVABLE-RESTART-005` verified: the root loop was the
 `Strategy._wait()` fallback clearing any plan and returning `TURN_RIGHT` with

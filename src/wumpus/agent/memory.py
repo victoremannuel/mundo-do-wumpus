@@ -170,7 +170,7 @@ class AgentMemory:
             return None
 
         self._turns_without_progress += 1
-        if result.action in (Action.TURN_LEFT, Action.TURN_RIGHT):
+        if result.action is Action.TURN_RIGHT:
             self._consecutive_rotations += 1
         else:
             self._consecutive_rotations = 0

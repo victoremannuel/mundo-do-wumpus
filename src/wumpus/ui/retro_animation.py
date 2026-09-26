@@ -690,7 +690,7 @@ def build_turn_events(
             )
         if perception.bump:
             events.append(AnimationEvent(kind=AnimationKind.BUMP, position=position))
-        if result.action in (Action.TURN_LEFT, Action.TURN_RIGHT):
+        if result.action is Action.TURN_RIGHT:
             events.append(
                 AnimationEvent(
                     kind=AnimationKind.TURN,

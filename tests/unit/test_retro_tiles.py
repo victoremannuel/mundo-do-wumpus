@@ -151,20 +151,21 @@ def test_an_empty_knowledge_base_reveals_nothing_but_fog_and_the_agent() -> None
     assert kinds == {TileKind.UNKNOWN, TileKind.AGENT}
 
 
-def test_the_board_marks_the_combined_start_exit_from_the_first_frame() -> None:
-    """The shared structural room is public, so fog never hides it."""
+def test_the_board_marks_the_separate_start_and_exit_from_the_first_frame() -> None:
+    """The public start and exit rooms are never hidden by fog."""
 
     knowledge = KnowledgeBase(6, 6)
     view = build_known_map_view(knowledge, Position(3, 3), Direction.NORTH)
 
     assert view.start_position == Position(1, 1)
-    assert view.exit_position == Position(1, 1)
+    assert view.exit_position == Position(6, 6)
     assert view.marker_at(Position(1, 1)) is TileKind.START
+    assert view.marker_at(Position(6, 6)) is TileKind.EXIT
     assert view.marker_at(Position(3, 3)) is None
 
     board = render_map(view).plain
     assert board.count("INI") == 1
-    assert board.count("SAI") == 0
+    assert board.count("SAI") == 1
 
 
 def test_the_agent_never_fully_hides_the_combined_start_exit_room() -> None:
@@ -249,14 +250,15 @@ def test_the_real_board_uses_the_same_geometry_as_the_known_board() -> None:
     assert {cell_len(line) for line in lines} == {map_board_width(6)}
 
 
-def test_the_real_board_marks_the_same_combined_start_exit_room() -> None:
-    """Debug shows the public structural room too."""
+def test_the_real_board_marks_the_same_separate_start_and_exit_rooms() -> None:
+    """Debug shows the same public start and exit rooms as the known map."""
 
     world = World(GeneratedMap(rows=6, cols=6, entities={}), rng=random.Random(7))
 
     view = build_real_map_view(world.debug_snapshot())
 
     assert view.marker_at(Position(1, 1)) is TileKind.START
+    assert view.marker_at(Position(6, 6)) is TileKind.EXIT
     board = render_map(view).plain
     assert board.count("INI") == 1
-    assert board.count("SAI") == 0
+    assert board.count("SAI") == 1

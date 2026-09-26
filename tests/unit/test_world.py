@@ -30,7 +30,11 @@ def move_to_center(world: World, *, avoid_south: bool = False) -> None:
     world.execute(Action.TURN_RIGHT)
     world.execute(Action.MOVE_FORWARD)
     world.execute(Action.MOVE_FORWARD)
-    world.execute(Action.TURN_LEFT)
+    # A 90-degree left turn is three real TURN_RIGHT actions: there is no
+    # canonical TURN_LEFT action.
+    world.execute(Action.TURN_RIGHT)
+    world.execute(Action.TURN_RIGHT)
+    world.execute(Action.TURN_RIGHT)
     world.execute(Action.MOVE_FORWARD)
     world.execute(Action.MOVE_FORWARD)
 
@@ -42,7 +46,7 @@ def test_world_starts_at_start_facing_north_with_zero_score() -> None:
     assert world.agent_direction is Direction.NORTH
     assert world.score == 0
     assert world.collected_gold == 0
-    assert world.exit_position == Position(1, 1)
+    assert world.exit_position == Position(6, 6)
     assert world.game_over is False
     assert world.escaped is False
     assert world.dead is False
@@ -104,31 +108,29 @@ def test_glitter_exists_only_in_the_gold_room() -> None:
 
 def test_wall_collision_preserves_position_and_emits_one_bump() -> None:
     world = world_with()
-    world.execute(Action.TURN_LEFT)
+    # Face WEST via three real TURN_RIGHT actions (no canonical TURN_LEFT).
+    world.execute(Action.TURN_RIGHT)
+    world.execute(Action.TURN_RIGHT)
+    world.execute(Action.TURN_RIGHT)
 
     result = world.execute(Action.MOVE_FORWARD)
 
     assert result.position == Position(1, 1)
     assert result.perception.bump is True
     assert result.score_delta == -1
-    assert result.total_score == -2
+    assert result.total_score == -4
     assert world.observe().bump is False
 
 
-def test_right_and_left_rotations_complete_their_cycles() -> None:
-    right_world = world_with()
-    left_world = world_with()
+def test_turn_right_completes_a_full_cycle() -> None:
+    world = world_with()
 
-    assert right_world.execute(Action.TURN_RIGHT).direction is Direction.EAST
-    assert left_world.execute(Action.TURN_LEFT).direction is Direction.WEST
+    assert world.execute(Action.TURN_RIGHT).direction is Direction.EAST
     for _ in range(3):
-        right_world.execute(Action.TURN_RIGHT)
-        left_world.execute(Action.TURN_LEFT)
+        world.execute(Action.TURN_RIGHT)
 
-    assert right_world.agent_direction is Direction.NORTH
-    assert left_world.agent_direction is Direction.NORTH
-    assert right_world.score == -4
-    assert left_world.score == -4
+    assert world.agent_direction is Direction.NORTH
+    assert world.score == -4
 
 
 @pytest.mark.parametrize("entity_type", [EntityType.PIT, EntityType.WUMPUS])
@@ -164,34 +166,61 @@ def test_grab_collects_and_removes_gold_with_combined_score() -> None:
     assert world.collected_gold == 1
 
 
-def test_climb_escapes_only_from_start_when_the_objective_is_satisfied() -> None:
+def _move_to_exit(world: World) -> None:
+    """Walk the agent from [1,1] to the far-corner exit [6,6] on a 6x6 map."""
+
+    for _ in range(5):
+        world.execute(Action.MOVE_FORWARD)
+    world.execute(Action.TURN_RIGHT)
+    for _ in range(5):
+        world.execute(Action.MOVE_FORWARD)
+
+
+def test_climb_at_the_start_never_ends_the_game() -> None:
     at_start = world_with({Position(2, 2): EntityType.GOLD})
-    away_from_exit = world_with()
 
     climbed = at_start.execute(Action.CLIMB)
-    away_from_exit.execute(Action.MOVE_FORWARD)
-    did_not_escape = away_from_exit.execute(Action.CLIMB)
 
     assert climbed.escaped is False
     assert climbed.total_score == -1
     assert at_start.game_over is False
+    assert at_start.last_event == INVALID_CLIMB_EVENT
+
+
+def test_climb_is_invalid_away_from_the_exit() -> None:
+    away_from_exit = world_with()
+    away_from_exit.execute(Action.MOVE_FORWARD)
+    did_not_escape = away_from_exit.execute(Action.CLIMB)
+
     assert did_not_escape.escaped is False
     assert away_from_exit.game_over is False
     assert away_from_exit.score == -2
     assert away_from_exit.last_event == INVALID_CLIMB_EVENT
 
+
+def test_climb_escapes_only_at_the_exit_when_the_objective_is_satisfied() -> None:
     fast_escape = World(
         GeneratedMap(rows=6, cols=6, entities={}),
         rng=random.Random(0),
         objective=GameObjective.ESCAPE_FAST,
     )
+    _move_to_exit(fast_escape)
+    assert fast_escape.agent_position == Position(6, 6)
     assert fast_escape.execute(Action.CLIMB).escaped
+
+
+def test_reaching_the_exit_without_climbing_does_not_escape() -> None:
+    world = world_with()
+    _move_to_exit(world)
+
+    assert world.agent_position == Position(6, 6)
+    assert world.escaped is False
+    assert world.game_over is False
 
 
 def test_scoring_rules_have_one_canonical_source() -> None:
     assert action_cost(Action.MOVE_FORWARD) == -1
     assert action_cost(Action.TURN_RIGHT) == -1
-    assert action_cost(Action.TURN_LEFT) == -1
     assert action_cost(Action.GRAB) == -1
     assert action_cost(Action.CLIMB) == -1
     assert action_cost(Action.SHOOT) == -10

@@ -43,6 +43,7 @@ SAFE_INITIAL_CELLS = frozenset(
         Position(1, 1),
         Position(1, 2),
         Position(2, 1),
+        Position(2, 2),
     }
 )
 
@@ -58,7 +59,7 @@ class GameConfig:
 
     @property
     def exit_position(self) -> Position:
-        """The public structural exit, co-located with the start room."""
+        """The public, protected exit in the far corner of this map."""
 
         return exit_position_for(self.rows, self.cols)
 
@@ -85,15 +86,9 @@ def available_entity_cells(rows: int, cols: int) -> int:
 
 
 def exit_position_for(rows: int, cols: int) -> Position:
-    """Return the single structural exit for any valid map dimensions.
+    """Return the single structural exit for any valid map dimensions."""
 
-    The rules deliberately make the spawn room the exit.  Keeping this as a
-    function preserves the single public derivation used by the world,
-    strategy, and presentation layers.
-    """
-
-    del rows, cols
-    return START_POSITION
+    return Position(rows, cols)
 
 
 def protected_cells(rows: int, cols: int) -> frozenset[Position]:
@@ -101,6 +96,6 @@ def protected_cells(rows: int, cols: int) -> frozenset[Position]:
 
     return frozenset(
         position
-        for position in SAFE_INITIAL_CELLS
+        for position in (*SAFE_INITIAL_CELLS, exit_position_for(rows, cols))
         if position.is_inside(rows, cols)
     )

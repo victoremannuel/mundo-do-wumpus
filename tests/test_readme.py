@@ -31,4 +31,4 @@ def test_readme_documents_start_climb_and_soluble_generation_rules() -> None:
         "solucionáveis",
     ):
         assert required.casefold() in readme.casefold()
-    assert "vitória exige `climb` em `[1,1]`" in readme.casefold()
+    assert "vitória exige `climb` em `[6,6]`" in readme.casefold()

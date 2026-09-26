@@ -14,7 +14,7 @@ from rich.text import Text
 
 from wumpus.agent.reasoning import DecisionReason
 from wumpus.domain import Direction, Perception, Position
-from wumpus.game.config import GameConfig
+from wumpus.game.config import START_POSITION, GameConfig
 from wumpus.game.objective import GameObjective
 from wumpus.game.engine import GameOutcome
 from wumpus.ui.retro_animation import (
@@ -294,7 +294,7 @@ def render_endgame(
     _append_field(text, "VISITED", str(outcome.visited_cells))
     _append_field(text, "SEED", "ALEATÓRIA" if seed is None else str(seed))
     game_config = config if config is not None else GameConfig()
-    _append_field(text, "INÍCIO", format_position(Position(1, 1)))
+    _append_field(text, "INÍCIO", format_position(START_POSITION))
     _append_field(text, "SAÍDA", format_position(game_config.exit_position))
     text.append("\n[Q] EXIT", style=RETRO_TEXT_DIM)
     return text

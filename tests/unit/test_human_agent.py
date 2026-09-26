@@ -52,12 +52,12 @@ def test_human_agent_requires_and_consumes_exactly_one_queued_action() -> None:
 
 def test_human_agent_records_results_without_running_inference() -> None:
     agent = HumanAgent()
-    agent.queue_action(Action.TURN_LEFT)
+    agent.queue_action(Action.TURN_RIGHT)
     chosen = agent.decide(observation())
     agent.process_result(result(chosen))
 
     assert agent.actions_taken == 1
-    assert agent.memory.actions == (Action.TURN_LEFT,)
+    assert agent.memory.actions == (Action.TURN_RIGHT,)
     assert not hasattr(agent, "inference")
 
 

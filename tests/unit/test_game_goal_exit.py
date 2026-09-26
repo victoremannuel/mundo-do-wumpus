@@ -55,16 +55,20 @@ def world_2x2(
 
 def test_config_centralizes_the_start_exit_and_capacity() -> None:
     config = GameConfig()
-    assert config.exit_position == Position(1, 1)
-    assert available_entity_cells(6, 6) == 33
-    assert available_entity_cells(2, 2) == 1
+    assert config.exit_position == Position(6, 6)
+    assert config.exit_position != Position(1, 1)
+    assert available_entity_cells(6, 6) == 31
+    assert available_entity_cells(2, 2) == 0
 
 
-def test_generator_keeps_initial_zone_empty_for_one_hundred_seeds() -> None:
+def test_generator_keeps_initial_zone_and_exit_empty_for_one_hundred_seeds() -> None:
     config = GameConfig()
     for seed in range(100):
         generated = MapGenerator(random.Random(seed), config).generate()
-        assert all(cell not in generated.entities for cell in (Position(1, 1), Position(1, 2), Position(2, 1)))
+        assert all(
+            cell not in generated.entities
+            for cell in (Position(1, 1), Position(1, 2), Position(2, 1), Position(2, 2), Position(6, 6))
+        )
 
 
 def test_generator_rejects_configurations_without_any_gold() -> None:
@@ -99,10 +103,13 @@ def test_default_maps_are_winnable_for_one_hundred_seeds(objective: GameObjectiv
     for seed in range(100):
         generated = MapGenerator(random.Random(seed), config, objective=objective).generate()
         reachable = independently_reachable(generated, config)
-        assert any(
-            position in reachable and entity is EntityType.GOLD
-            for position, entity in generated.entities.items()
-        )
+        assert config.exit_position in reachable
+        gold_positions = [
+            position for position, entity in generated.entities.items()
+            if entity is EntityType.GOLD
+        ]
+        assert len(gold_positions) == config.gold_count
+        assert all(position in reachable for position in gold_positions)
 
 
 @pytest.mark.parametrize("objective", tuple(GameObjective))
@@ -115,14 +122,30 @@ def test_same_seed_config_and_objective_reproduce_the_same_map(
     assert first.entities == second.entities
 
 
-def test_fast_escape_climbs_from_the_start() -> None:
+def _move_to_2x2_exit(world: World) -> None:
+    """Walk from [1,1] to the far-corner exit [2,2] of a 2x2 map."""
+
+    world.execute(Action.MOVE_FORWARD)
+    world.execute(Action.TURN_RIGHT)
+    world.execute(Action.MOVE_FORWARD)
+
+
+def test_climb_at_the_start_never_ends_the_game_on_a_2x2_map() -> None:
     world = world_2x2(objective=GameObjective.ESCAPE_FAST)
+    assert not world.execute(Action.CLIMB).escaped
+    assert not world.game_over
+
+
+def test_fast_escape_climbs_at_the_exit() -> None:
+    world = world_2x2(objective=GameObjective.ESCAPE_FAST)
+    _move_to_2x2_exit(world)
     climb = world.execute(Action.CLIMB)
     assert climb.escaped and world.game_over
 
 
 def test_collect_all_blocks_then_climbs_after_every_gold() -> None:
     blocked = world_2x2({Position(1, 2): EntityType.GOLD}, objective=GameObjective.COLLECT_ALL_GOLD)
+    _move_to_2x2_exit(blocked)
     result = blocked.execute(Action.CLIMB)
     assert result.exit_blocked and not result.escaped and not blocked.game_over
 
@@ -130,15 +153,19 @@ def test_collect_all_blocks_then_climbs_after_every_gold() -> None:
     complete.execute(Action.TURN_RIGHT)
     complete.execute(Action.MOVE_FORWARD)
     complete.execute(Action.GRAB)
-    complete.execute(Action.TURN_LEFT)
-    complete.execute(Action.TURN_LEFT)
+    # Turn from EAST back to NORTH: a left turn is three real TURN_RIGHT
+    # actions, since TURN_LEFT is not a canonical action.
+    complete.execute(Action.TURN_RIGHT)
+    complete.execute(Action.TURN_RIGHT)
+    complete.execute(Action.TURN_RIGHT)
     complete.execute(Action.MOVE_FORWARD)
     result = complete.execute(Action.CLIMB)
     assert result.escaped and complete.game_over
 
 
-def test_collect_all_with_zero_gold_climbs_at_the_start() -> None:
+def test_collect_all_with_zero_gold_climbs_at_the_exit() -> None:
     world = world_2x2(objective=GameObjective.COLLECT_ALL_GOLD)
+    _move_to_2x2_exit(world)
     assert world.execute(Action.CLIMB).escaped
 
 

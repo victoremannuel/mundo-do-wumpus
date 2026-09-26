@@ -214,15 +214,15 @@ def test_simple_agent_memory_is_updated_by_the_real_game_loop() -> None:
 
     outcome = GameEngine(world, agent).run()
 
-    # Once the configured gold is collected, the agent is already at the
-    # public start/exit room and climbs rather than needlessly exploring.
+    # Once the configured gold is collected, the agent grabs it at the start
+    # then explores its way to the far-corner exit and climbs there.
     assert outcome.status is GameStatus.ESCAPED
     assert agent.memory.path[0] == Position(1, 1)
-    assert agent.memory.path[-1] == Position(1, 1)
+    assert agent.memory.path[-1] == Position(6, 6)
     assert agent.memory.actions[0] is Action.GRAB
     assert agent.memory.actions[-1] is Action.CLIMB
     assert agent.memory.collected_gold == 1
-    assert agent.memory.score == 998
+    assert agent.memory.score == 894
     assert agent.memory.gold_seen == frozenset({Position(1, 1)})
 
 

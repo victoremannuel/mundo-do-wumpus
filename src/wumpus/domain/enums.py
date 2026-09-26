@@ -13,7 +13,6 @@ class Direction(Enum):
 class Action(Enum):
     MOVE_FORWARD = auto()
     TURN_RIGHT = auto()
-    TURN_LEFT = auto()
     GRAB = auto()
     SHOOT = auto()
     CLIMB = auto()

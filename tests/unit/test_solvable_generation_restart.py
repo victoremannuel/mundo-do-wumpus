@@ -46,13 +46,19 @@ def test_one_hundred_seeded_maps_keep_invariants_and_a_safe_gold_return_route() 
         assert (generated.rows, generated.cols) == (6, 6)
         assert Counter(generated.entities.values()) == expected
         assert len(generated.entities) == len(set(generated.entities)) == 11
-        assert all(cell not in generated.entities for cell in (Position(1, 1), Position(1, 2), Position(2, 1)))
-        assert is_world_solvable(generated)
-        assert any(
-            entity is EntityType.GOLD and position in accessible
-            for position, entity in generated.entities.items()
+        assert all(
+            cell not in generated.entities
+            for cell in (Position(1, 1), Position(1, 2), Position(2, 1), Position(2, 2), Position(6, 6))
         )
+        assert is_world_solvable(generated)
+        gold_positions = [
+            position for position, entity in generated.entities.items()
+            if entity is EntityType.GOLD
+        ]
+        assert len(gold_positions) == config.gold_count
+        assert all(position in accessible for position in gold_positions)
         assert Position(1, 1) in accessible  # BFS component makes return possible.
+        assert Position(6, 6) in accessible  # The far-corner exit stays reachable.
 
 
 def test_twenty_restarts_never_repeat_the_immediately_previous_layout() -> None:

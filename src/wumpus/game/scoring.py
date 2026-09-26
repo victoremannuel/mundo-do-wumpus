@@ -9,7 +9,6 @@ ACTION_COSTS = MappingProxyType(
     {
         Action.MOVE_FORWARD: -1,
         Action.TURN_RIGHT: -1,
-        Action.TURN_LEFT: -1,
         Action.GRAB: -1,
         Action.SHOOT: -10,
         Action.CLIMB: -1,

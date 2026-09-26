@@ -44,10 +44,17 @@ def world_with(
     )
 
 
-EXIT_SCRIPT = (Action.CLIMB,)
+# Navigate the default 6x6 map from [1,1] to the far-corner exit [6,6],
+# then climb: five moves north, turn east, five moves east, climb.
+EXIT_SCRIPT = (
+    (Action.MOVE_FORWARD,) * 5
+    + (Action.TURN_RIGHT,)
+    + (Action.MOVE_FORWARD,) * 5
+    + (Action.CLIMB,)
+)
 
 
-def test_engine_stops_when_the_agent_climbs_at_the_start_exit() -> None:
+def test_engine_stops_when_the_agent_climbs_at_the_exit() -> None:
     world = world_with()
     agent = ScriptedAgent(EXIT_SCRIPT, fallback=Action.TURN_RIGHT)
     engine = GameEngine(world, agent)
@@ -118,7 +125,7 @@ def test_engine_follows_the_perceive_decide_act_learn_cycle() -> None:
     assert agent.observations[0].collected_gold == 0
     assert agent.observations[0].perception.glitter is True
     assert agent.observations[1].collected_gold == 1
-    assert [result.action for result in agent.results[:2]] == [Action.GRAB, Action.CLIMB]
+    assert [result.action for result in agent.results[:2]] == [Action.GRAB, Action.MOVE_FORWARD]
     assert outcome.collected_gold == 1
     assert outcome.score == world.score
 
@@ -166,10 +173,11 @@ def test_engine_renders_before_deciding_and_renders_final_after_learning() -> No
         rng=random.Random(0),
     )
     agent = RecordingAgent(
+        # On a 2x2 map the exit is the far corner [2,2]: move north, turn
+        # east, move east, then climb.
         [
             Action.MOVE_FORWARD,
-            Action.TURN_LEFT,
-            Action.TURN_LEFT,
+            Action.TURN_RIGHT,
             Action.MOVE_FORWARD,
             Action.CLIMB,
         ],
@@ -195,7 +203,7 @@ def test_engine_renders_before_deciding_and_renders_final_after_learning() -> No
 
     outcome = engine.run()
 
-    assert events == ["observe", "render", "decide", "execute", "process_result"] * 5 + ["render_final"]
+    assert events == ["observe", "render", "decide", "execute", "process_result"] * 4 + ["render_final"]
     assert seen_observations == agent.observations
     assert seen_outcomes == [outcome]
 
@@ -203,7 +211,7 @@ def test_engine_renders_before_deciding_and_renders_final_after_learning() -> No
 @pytest.mark.parametrize(
     ("entities", "actions", "max_turns", "expected_status"),
     [
-        ({}, EXIT_SCRIPT, 11, GameStatus.ESCAPED),
+        ({}, EXIT_SCRIPT, 12, GameStatus.ESCAPED),
         ({Position(2, 1): EntityType.PIT}, (Action.MOVE_FORWARD,), 2, GameStatus.DEAD),
         ({}, (Action.TURN_RIGHT,), 1, GameStatus.TURN_LIMIT),
     ],
@@ -230,7 +238,7 @@ def test_engine_renders_final_for_every_terminal_status(
 
 def test_outcome_is_unavailable_before_the_game_ends() -> None:
     world = world_with()
-    engine = GameEngine(world, ScriptedAgent([], fallback=Action.TURN_LEFT), max_turns=5)
+    engine = GameEngine(world, ScriptedAgent([], fallback=Action.TURN_RIGHT), max_turns=5)
 
     engine.step()
     with pytest.raises(RuntimeError, match="before the game is over"):
@@ -269,7 +277,7 @@ def test_observation_reports_an_inactive_agent_after_the_game_ends() -> None:
     observation = world.observation()
 
     assert observation.active is False
-    assert observation.position == Position(1, 1)
+    assert observation.position == Position(6, 6)
 
 
 def test_seeded_games_with_the_simple_agent_are_reproducible() -> None:

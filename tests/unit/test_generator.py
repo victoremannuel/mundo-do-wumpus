@@ -8,6 +8,7 @@ from wumpus.environment import (
     SAFE_INITIAL_CELLS,
     MapGenerationError,
     MapGenerator,
+    is_world_solvable,
 )
 from wumpus.game import GameConfig
 
@@ -105,3 +106,51 @@ def test_generator_rejects_impossible_configuration(config: GameConfig) -> None:
 def test_generated_map_rejects_out_of_bounds_lookup() -> None:
     with pytest.raises(ValueError, match="outside generated map"):
         generate().entity_at(Position(0, 1))
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_a_hazard_dense_config_stays_winnable_across_many_seeds(seed: int) -> None:
+    """A tight, hazard-dense 6x6 config leaves little room to spare.
+
+    16 hazards plus 3 gold out of 31 available cells makes it far more
+    likely the bounded random-sampling phase needs several attempts (or the
+    constructive fallback) before finding a layout where the exit and every
+    gold stay reachable from the start -- exercising that path far harder
+    than the spacious default config does.
+    """
+
+    config = GameConfig(rows=6, cols=6, wumpus_count=6, pit_count=6, gold_count=3, bat_count=4)
+    generated_map = MapGenerator(rng=random.Random(seed), config=config).generate()
+
+    assert is_world_solvable(generated_map)
+    counts = Counter(generated_map.entities.values())
+    assert counts[EntityType.WUMPUS] == 6
+    assert counts[EntityType.PIT] == 6
+    assert counts[EntityType.GOLD] == 3
+    assert counts[EntityType.BAT] == 4
+    assert not SAFE_INITIAL_CELLS.intersection(generated_map.entities)
+    assert config.exit_position not in generated_map.entities
+
+
+def test_constructive_fallback_alone_guarantees_exit_and_gold_reachability() -> None:
+    """Directly exercise `_construct_winnable_map`, bypassing random sampling.
+
+    Calling the constructive fallback directly proves it alone -- with no
+    help from lucky random sampling -- always yields a map where the exit
+    and every gold are reachable from the start.
+    """
+
+    config = GameConfig(rows=6, cols=6, wumpus_count=6, pit_count=6, gold_count=3, bat_count=4)
+    for seed in range(20):
+        generator = MapGenerator(rng=random.Random(seed), config=config)
+        available = generator._available_positions()
+        generated_map = generator._construct_winnable_map(available)
+
+        assert is_world_solvable(generated_map)
+        counts = Counter(generated_map.entities.values())
+        assert counts[EntityType.WUMPUS] == 6
+        assert counts[EntityType.PIT] == 6
+        assert counts[EntityType.GOLD] == 3
+        assert counts[EntityType.BAT] == 4
+        assert not SAFE_INITIAL_CELLS.intersection(generated_map.entities)
+        assert config.exit_position not in generated_map.entities

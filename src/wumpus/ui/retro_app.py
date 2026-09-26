@@ -469,7 +469,14 @@ class GameScreen(Screen[None]):
         self._manual_action(Action.MOVE_FORWARD)
 
     def action_turn_left(self) -> None:
-        self._manual_action(Action.TURN_LEFT)
+        """Turn left by executing three real `TURN_RIGHT` turns in sequence.
+
+        `TURN_LEFT` is not a canonical action; each `TURN_RIGHT` below is its
+        own full engine turn, so a mid-sequence game end stops the rest.
+        """
+
+        for _ in range(3):
+            self._manual_action(Action.TURN_RIGHT)
 
     def action_turn_right(self) -> None:
         self._manual_action(Action.TURN_RIGHT)

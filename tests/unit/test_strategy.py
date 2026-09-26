@@ -386,10 +386,12 @@ def test_strategy_utility_rejects_bat_risk_after_two_gold() -> None:
     assert strategy._target is None
 
 
-def test_strategy_climbs_at_the_start_after_all_configured_gold() -> None:
+def test_strategy_climbs_at_its_configured_exit_after_all_configured_gold() -> None:
     knowledge = safe_knowledge(3, 3, [START_POSITION])
     knowledge.mark_safe(Position(2, 1))
-    strategy = Strategy(total_gold=3)
+    strategy = Strategy(
+        total_gold=3, exit_position=START_POSITION,
+    )
 
     action = strategy.decide(
         knowledge=knowledge,
@@ -402,14 +404,16 @@ def test_strategy_climbs_at_the_start_after_all_configured_gold() -> None:
     assert action is Action.CLIMB
 
 
-def test_strategy_returns_home_with_all_configured_gold() -> None:
+def test_strategy_returns_to_its_configured_exit_with_all_configured_gold() -> None:
     knowledge = safe_knowledge(
         3,
         3,
         [START_POSITION, Position(2, 1), Position(3, 1)],
     )
     knowledge.mark_safe(Position(3, 2))
-    strategy = Strategy(total_gold=3)
+    strategy = Strategy(
+        total_gold=3, exit_position=START_POSITION,
+    )
 
     action = strategy.decide(
         knowledge=knowledge,

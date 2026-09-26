@@ -10,8 +10,6 @@ _RIGHT_TURN = {
     Direction.WEST: Direction.NORTH,
 }
 
-_LEFT_TURN = {result: source for source, result in _RIGHT_TURN.items()}
-
 _FORWARD_DELTA = {
     Direction.NORTH: (1, 0),
     Direction.EAST: (0, 1),
@@ -21,12 +19,10 @@ _FORWARD_DELTA = {
 
 
 def rotated(direction: Direction, action: Action) -> Direction:
-    """Return the direction produced by a left or right turn."""
+    """Return the direction produced by a right turn."""
 
     if action is Action.TURN_RIGHT:
         return _RIGHT_TURN[direction]
-    if action is Action.TURN_LEFT:
-        return _LEFT_TURN[direction]
     raise ValueError(f"Action does not rotate the agent: {action}")
 
 

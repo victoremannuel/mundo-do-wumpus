@@ -26,9 +26,9 @@ def test_generator_uses_exact_custom_counts(config: GameConfig) -> None:
     assert counts[EntityType.BAT] == config.bat_count
 
 
-def test_more_than_33_entities_is_rejected_in_ui_and_generator() -> None:
+def test_more_than_31_entities_is_rejected_in_ui_and_generator() -> None:
     config = GameConfig(wumpus_count=33, pit_count=0, gold_count=1, bat_count=0)
-    assert "33 células" in (validate_cave(config) or "")
+    assert "31 células" in (validate_cave(config) or "")
     with pytest.raises(MapGenerationError, match="exceeds"):
         MapGenerator(random.Random(1), config).generate()
 

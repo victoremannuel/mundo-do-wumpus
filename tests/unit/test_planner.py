@@ -1,6 +1,7 @@
 from collections import deque
 
 from wumpus.agent import KnowledgeBase, find_path, plan_actions
+from wumpus.agent.planner import turns_to_face
 from wumpus.domain import Action, Direction, EntityType, Position
 
 
@@ -101,7 +102,9 @@ def test_plan_actions_accumulates_orientation_across_multiple_steps() -> None:
         [
             Action.TURN_RIGHT,
             Action.MOVE_FORWARD,
-            Action.TURN_LEFT,
+            Action.TURN_RIGHT,
+            Action.TURN_RIGHT,
+            Action.TURN_RIGHT,
             Action.MOVE_FORWARD,
         ]
     )
@@ -109,3 +112,20 @@ def test_plan_actions_accumulates_orientation_across_multiple_steps() -> None:
 
 def test_plan_actions_for_an_empty_route_is_empty() -> None:
     assert plan_actions([Position(1, 1)], Direction.NORTH) == deque()
+
+
+def test_turning_west_from_north_is_three_real_turn_right_actions() -> None:
+    assert turns_to_face(Direction.NORTH, Direction.WEST) == (
+        Action.TURN_RIGHT,
+        Action.TURN_RIGHT,
+        Action.TURN_RIGHT,
+    )
+
+
+def test_turns_to_face_never_returns_turn_left() -> None:
+    directions = (Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST)
+    for current in directions:
+        for target in directions:
+            assert all(
+                action is Action.TURN_RIGHT for action in turns_to_face(current, target)
+            )

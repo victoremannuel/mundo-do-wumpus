@@ -139,7 +139,8 @@ def test_the_final_summary_reports_the_objective_and_both_structural_rooms() -> 
         ):
             assert label in summary, label
         assert "ESCAPAR RÁPIDO" in summary
-        assert summary.count("[1,1]") == 2
+        assert "[1,1]" in summary
+        assert "[6,6]" in summary
 
     run_scenario(scenario)
 
@@ -184,7 +185,7 @@ def test_invalid_capacity_stays_on_setup_and_shows_a_readable_error() -> None:
         assert isinstance(app.screen, SetupScreen)
         error = setup.query_one("#setup-error").visual.plain
         assert "CONFIGURAÇÃO INVÁLIDA" in error
-        assert "33 células" in error
+        assert "31 células" in error
 
     run_scenario(scenario)
 
@@ -234,7 +235,7 @@ def test_manual_mode_never_advances_without_a_player_command() -> None:
 
 @pytest.mark.parametrize(
     ("key", "action"),
-    (("up", Action.MOVE_FORWARD), ("left", Action.TURN_LEFT),
+    (("up", Action.MOVE_FORWARD), ("left", Action.TURN_RIGHT),
      ("right", Action.TURN_RIGHT), ("g", Action.GRAB),
      ("f", Action.SHOOT)),
 )
@@ -353,7 +354,12 @@ def test_restart_also_works_after_game_over() -> None:
         game = app.game_screen
         assert game is not None
         game.animation_controller.cancel()
-        for action in (Action.MOVE_FORWARD,) * 5 + (Action.TURN_RIGHT,) + (Action.MOVE_FORWARD,) * 5:
+        for action in (
+            (Action.MOVE_FORWARD,) * 5
+            + (Action.TURN_RIGHT,)
+            + (Action.MOVE_FORWARD,) * 5
+            + (Action.CLIMB,)
+        ):
             game._manual_action(action)
             game.animation_controller.cancel()
         game.advance_one_turn()
@@ -411,7 +417,7 @@ def test_building_visual_events_does_not_change_the_seeded_outcome() -> None:
 
 
 def test_debug_view_is_observation_only_for_the_same_manual_actions() -> None:
-    actions = (Action.TURN_RIGHT, Action.MOVE_FORWARD, Action.TURN_LEFT, Action.GRAB)
+    actions = (Action.TURN_RIGHT, Action.MOVE_FORWARD, Action.TURN_RIGHT, Action.GRAB)
     quiet = main.build_session(SessionSettings(GameMode.MANUAL, 42))
     debugged = main.build_session(SessionSettings(GameMode.MANUAL, 42))
     assert quiet.manual_action_submitter is not None

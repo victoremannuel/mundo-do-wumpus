@@ -29,7 +29,7 @@ def run_known_map(
     return world, agent, outcome
 
 
-def test_real_agent_collects_known_gold_returns_and_climbs_at_start() -> None:
+def test_real_agent_collects_known_gold_and_climbs_at_the_exit() -> None:
     gold = Position(3, 1)
     config = GameConfig(
         rows=3,
@@ -49,7 +49,7 @@ def test_real_agent_collects_known_gold_returns_and_climbs_at_start() -> None:
     assert outcome.collected_gold == 1
     assert outcome.turns == agent.actions_taken
     assert outcome.score == world.score == agent.memory.score
-    assert world.agent_position == Position(1, 1)
+    assert world.agent_position == config.exit_position
     assert gold in agent.memory.visited
     assert Action.GRAB in agent.memory.actions
     assert agent.memory.actions[-1] is Action.CLIMB
@@ -82,7 +82,7 @@ def test_real_agent_infers_hazards_hunts_and_escapes_a_mixed_map() -> None:
     assert outcome.killed_wumpus == 1
     assert outcome.turns == agent.actions_taken
     assert outcome.score == world.score == agent.memory.score
-    assert world.agent_position == Position(1, 1)
+    assert world.agent_position == config.exit_position
     assert pit not in agent.memory.visited
     assert pit in agent.memory.knowledge.confirmed_pits
     assert wumpus in agent.memory.knowledge.dead_wumpus

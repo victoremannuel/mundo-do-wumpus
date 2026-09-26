@@ -115,7 +115,7 @@ def test_agent_turns_after_a_bump() -> None:
     agent = SimpleAgent(random.Random(1))
     agent.process_result(result(Action.MOVE_FORWARD, bump=True))
 
-    assert agent.decide(observation()) in (Action.TURN_LEFT, Action.TURN_RIGHT)
+    assert agent.decide(observation()) is Action.TURN_RIGHT
 
 
 def test_agent_stops_turning_after_a_successful_move() -> None:
@@ -130,8 +130,8 @@ def test_agent_stops_turning_after_a_successful_move() -> None:
 
 def test_agent_counts_processed_results() -> None:
     agent = SimpleAgent(random.Random(1))
-    agent.process_result(result(Action.TURN_LEFT))
-    agent.process_result(result(Action.TURN_LEFT))
+    agent.process_result(result(Action.TURN_RIGHT))
+    agent.process_result(result(Action.TURN_RIGHT))
 
     assert agent.actions_taken == 2
 

@@ -14,6 +14,7 @@ from wumpus.game.config import (
     START_POSITION,
     GameConfig,
     available_entity_cells,
+    exit_position_for,
     protected_cells,
 )
 from wumpus.game.objective import GameObjective
@@ -72,26 +73,14 @@ def layout_signature(generated_map: GeneratedMap) -> tuple[tuple[int, int, str],
     )
 
 
-def is_world_solvable(generated_map: GeneratedMap) -> bool:
-    """Return whether a gold is reachable from start without a live hazard.
+def _reachable_component(generated_map: GeneratedMap, start: Position) -> set[Position]:
+    """Return every cell reachable from ``start`` through non-hazard cells."""
 
-    This is generator-only validation.  It intentionally receives a hidden
-    map and is never imported by the logical agent.
-    """
-
-    start = START_POSITION
-    if not start.is_inside(generated_map.rows, generated_map.cols):
-        return False
     reachable = {start}
     pending = deque([start])
     while pending:
         position = pending.popleft()
-        for candidate in (
-            Position(position.row - 1, position.col),
-            Position(position.row + 1, position.col),
-            Position(position.row, position.col - 1),
-            Position(position.row, position.col + 1),
-        ):
+        for candidate in position.neighbors():
             if (
                 not candidate.is_inside(generated_map.rows, generated_map.cols)
                 or candidate in reachable
@@ -100,9 +89,27 @@ def is_world_solvable(generated_map: GeneratedMap) -> bool:
                 continue
             reachable.add(candidate)
             pending.append(candidate)
-    return any(
-        entity is EntityType.GOLD and position in reachable
+    return reachable
+
+
+def is_world_solvable(generated_map: GeneratedMap) -> bool:
+    """Return whether the exit and every gold are reachable from the start.
+
+    This is generator-only validation.  It intentionally receives a hidden
+    map and is never imported by the logical agent.
+    """
+
+    start = START_POSITION
+    if not start.is_inside(generated_map.rows, generated_map.cols):
+        return False
+    reachable = _reachable_component(generated_map, start)
+    exit_position = exit_position_for(generated_map.rows, generated_map.cols)
+    if exit_position not in reachable:
+        return False
+    return all(
+        position in reachable
         for position, entity in generated_map.entities.items()
+        if entity is EntityType.GOLD
     )
 
 
@@ -214,7 +221,7 @@ class MapGenerator:
             )
 
     def _validate_winnability_capacity(self) -> None:
-        safe_component = self._safe_component_for_gold()
+        safe_component = self._safe_component_for_route()
         hazards = (
             self._config.wumpus_count
             + self._config.pit_count
@@ -226,20 +233,51 @@ class MapGenerator:
                 "vencível para o objetivo selecionado."
             )
 
-    def _safe_component_for_gold(self) -> set[Position]:
-        """Grow one small random hazard-free component containing a gold."""
+    def _monotonic_route(self, start: Position, goal: Position) -> list[Position]:
+        """One randomized shortest path from ``start`` to ``goal``.
 
-        safe_component = set(protected_cells(self._config.rows, self._config.cols))
+        Each step reduces the remaining row or column distance -- never both
+        moves away from the goal and never leaves the grid -- so the route
+        has exactly ``manhattan_distance + 1`` cells; ties between a row step
+        and a column step are broken randomly for variety between maps.
+        """
+
+        route = [start]
+        current = start
+        while current != goal:
+            moves = []
+            if current.row != goal.row:
+                step = 1 if goal.row > current.row else -1
+                moves.append(Position(current.row + step, current.col))
+            if current.col != goal.col:
+                step = 1 if goal.col > current.col else -1
+                moves.append(Position(current.row, current.col + step))
+            current = self._rng.choice(moves)
+            route.append(current)
+        return route
+
+    def _safe_component_for_route(self) -> set[Position]:
+        """Grow one hazard-free component connecting start to the exit.
+
+        The safe-initial cells are already mutually adjacent, but the exit
+        room is a separate, usually distant, protected cell: growing a blob
+        outward with no directional bias could wander the whole grid before
+        ever touching it. A short randomized shortest path bridges the two
+        directly and cheaply; growth from that already-connected route only
+        needs to add room for every configured gold outside the protected
+        cells.
+        """
+
         protected = protected_cells(self._config.rows, self._config.cols)
-        while len(safe_component.difference(protected)) < 1:
+        exit_position = exit_position_for(self._config.rows, self._config.cols)
+        safe_component = set(protected) | set(
+            self._monotonic_route(START_POSITION, exit_position)
+        )
+        needed_gold_slots = self._config.gold_count
+        while len(safe_component.difference(protected)) < needed_gold_slots:
             candidates: set[Position] = set()
             for position in safe_component:
-                for candidate in (
-                    Position(position.row - 1, position.col),
-                    Position(position.row + 1, position.col),
-                    Position(position.row, position.col - 1),
-                    Position(position.row, position.col + 1),
-                ):
+                for candidate in position.neighbors():
                     if candidate.is_inside(self._config.rows, self._config.cols):
                         candidates.add(candidate)
             candidates.difference_update(safe_component)
@@ -252,7 +290,7 @@ class MapGenerator:
         return safe_component
 
     def _construct_winnable_map(self, available: list[Position]) -> GeneratedMap:
-        safe_component = self._safe_component_for_gold()
+        safe_component = self._safe_component_for_route()
         entities: dict[Position, EntityType] = {}
         remaining_hazard_slots = [
             position for position in available if position not in safe_component
@@ -269,22 +307,11 @@ class MapGenerator:
             ]
         protected = protected_cells(self._config.rows, self._config.cols)
         gold_slots = sorted(safe_component.difference(protected))
-        safe_gold = self._rng.choice(gold_slots)
-        entities[safe_gold] = EntityType.GOLD
-        remaining_gold_slots = [
-            position
-            for position in available
-            if position not in entities and position != safe_gold
-        ]
-        entities.update(
-            (position, EntityType.GOLD)
-            for position in self._rng.sample(
-                remaining_gold_slots, k=self._config.gold_count - 1
-            )
-        )
+        gold_positions = self._rng.sample(gold_slots, k=self._config.gold_count)
+        entities.update((position, EntityType.GOLD) for position in gold_positions)
         generated_map = GeneratedMap(self._config.rows, self._config.cols, entities)
         if not is_world_solvable(generated_map):
-            raise AssertionError("Constructed map must contain a safe gold route")
+            raise AssertionError("Constructed map must contain a safe route to every gold and the exit")
         return generated_map
 
     def _validate(self, generated_map: GeneratedMap) -> None:
@@ -319,4 +346,4 @@ class MapGenerator:
             raise AssertionError("Generated entities overlap")
 
         if not is_world_solvable(generated_map):
-            raise AssertionError("Generated map has no safe route to gold")
+            raise AssertionError("Generated map has no safe route to the exit or a gold")
