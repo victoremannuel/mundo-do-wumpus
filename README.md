@@ -12,7 +12,7 @@ O projeto combina um **agente baseado em conhecimento**, um **agente orientado a
 - A zona inicial (`[1,1]`, `[1,2]`, `[2,1]`, `[2,2]`) e a sala de saída `[6,6]` são livres de entidades. Cada mapa tem 2 Wumpus, 4 poços, 3 ouros e 2 morcegos, sem sobreposição.
 - Ouro vale `+1000`; ações comuns custam `-1`; disparar custa `-10`; morrer aplica `-1000` além do custo de entrar na sala.
 - A vitória exige `CLIMB` em `[6,6]` quando o objetivo estiver satisfeito; subir em outra sala, incluindo `[1,1]`, não encerra a partida, e chegar a `[6,6]` sem executar `CLIMB` também não encerra.
-- **ESCAPAR O MAIS RÁPIDO POSSÍVEL** chega à saída com prioridade, usando apenas rotas seguras conhecidas, inferência e risco aceitável; ouro pode ser ignorado pelo agente autônomo. **COLETAR TODOS OS OUROS ANTES DE ESCAPAR** exige todos os ouros configurados e bloqueia a saída enquanto houver ouro pendente.
+- **ESCAPAR O MAIS RÁPIDO POSSÍVEL** chega à saída com prioridade, usando apenas rotas seguras conhecidas, inferência e risco aceitável, e não desvia para procurar ouro; porém, se o agente entrar em uma sala com ouro durante sua própria rota de escape, ele o coleta com `GRAB` antes de continuar rumo à saída. **COLETAR TODOS OS OUROS ANTES DE ESCAPAR** exige todos os ouros configurados e bloqueia a saída enquanto houver ouro pendente.
 - A geração escolhe somente mapas estruturalmente solucionáveis, sem entregar essa solução ao agente: uma BFS privada exige que `[6,6]` e todos os ouros configurados sejam alcançáveis a partir de `[1,1]` por salas sem poço, Wumpus vivo ou morcego. Isso prova que uma solução física existe, não que o agente necessariamente a encontrará.
 - Morcegos teleportam o agente para sala aleatória e podem formar cadeia; a orientação é preservada. A flecha segue em linha reta até parede ou primeiro Wumpus vivo.
 - A única ação de rotação canônica é `TURN_RIGHT`; não existe `TURN_LEFT`. Um giro de 90° à esquerda é executado como três `TURN_RIGHT` reais em sequência, cada um custando `-1`.
@@ -36,7 +36,7 @@ O mapa real só aparece no caminho explícito `World -> DebugRenderer -> interfa
 1. A memória registra observação e resultado da ação.
 2. A base de conhecimento marca salas visitadas, seguras, desconhecidas, possíveis perigos, perigos confirmados e conhecimento negativo.
 3. Ausência de sinal elimina o perigo correspondente nas adjacências; sinais positivos adicionam candidatos. Um perigo só é confirmado quando uma observação tem um único candidato possível.
-4. A estratégia escolhe uma meta pública: em escape rápido, prioriza o encerramento válido em `[6,6]`; em coletar todos, pega brilho, explora até obter todos os ouros e então segue até `[6,6]` para subir. Ambas preservam caça racional e risco aceitável.
+4. Em qualquer objetivo, brilho na sala atualmente ocupada tem precedência sobre continuar uma rota em cache: a estratégia sempre executa `GRAB` primeiro. A partir daí, a estratégia escolhe uma meta pública: em escape rápido, prioriza o encerramento válido em `[6,6]` sem procurar ouro; em coletar todos, explora até obter todos os ouros e então segue até `[6,6]` para subir. Ambas preservam caça racional e risco aceitável.
 5. O planejador BFS cria rota apenas por salas conhecidas como seguras.
 
 Como há múltiplos perigos de cada tipo, a interseção de dois sinais positivos não confirma um perigo por si só: perigos distintos podem explicar cada sinal. A implementação privilegia inferências sólidas, ainda que incompletas.

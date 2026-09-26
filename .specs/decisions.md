@@ -513,6 +513,80 @@ full regression suite (`pytest -q`); `tests/unit/test_game_goal_exit.py`;
 `tests/unit/test_world.py`; `tests/unit/test_cycle_recovery.py`;
 `tests/unit/test_planner.py`; `tests/unit/test_solvable_generation_restart.py`.
 
+## DEC-012 — ESCAPE_FAST collects incidental gold without detouring
+
+Date: 2026-09-26
+Status: ACCEPTED
+Affected phase(s): corrective maintenance — strategy/objective behavior
+(supersedes only the "deliberately skips glitter" consequence of DEC-008)
+
+Context:
+DEC-008 established that `ESCAPE_FAST` orders the safe frontier by real
+planned action cost plus the Manhattan lower bound to the exit and
+"deliberately skips glitter". The user now explicitly requires that, if the
+agent passes through a room that contains gold while following its escape
+route, it collects that gold instead of walking past it. The root cause was
+architectural, not policy: `Strategy.decide()` reused an already-valid
+cached movement plan (`self._target`/`self._path`/`self._actions`) before
+either objective branch could react to `glitter`, so a route already in
+progress could advance past a glittering room untouched; `_decide_fast_escape`
+also never received `glitter` at all.
+
+Decision:
+`ESCAPE_FAST` still does not search for gold and still does not detour
+toward it: the safe-frontier ordering toward the exit is unchanged. However,
+whenever the observation of the room the agent currently occupies has
+`glitter=True`, `GRAB` now takes precedence over continuing any cached
+movement plan, for every objective, including a route that is already
+mid-execution with a non-empty `planned_actions` queue. This check is
+centralized once in `Strategy.decide()`, ahead of the existing "reuse a
+still-valid cached plan" short-circuit and ahead of the recovery/objective
+dispatch, instead of being duplicated in `_decide_fast_escape` and
+`_decide_collect_all`. On `GRAB`, the stale plan is discarded
+(`self._clear()`) rather than resumed mid-queue; the next `decide()` call
+recomputes a fresh route deterministically from the agent's current
+knowledge, exactly as any other replanning event already does. The decision
+still only reads `observation.perception.glitter`; it never inspects
+`World`, `GeneratedMap`, or any hidden gold position.
+
+Reason:
+This is the smallest change that satisfies "does not seek gold, but does not
+ignore gold it is already standing on": moving one existing check earlier in
+the decision hierarchy, rather than adding new gold-awareness state, keeps
+`ESCAPE_FAST` and `COLLECT_ALL_GOLD` semantically distinct (the former still
+never becomes "collect everything first") while removing a real defect in
+plan-cache precedence. Centralizing the check in `Strategy.decide()` also
+removes the duplicated `if glitter: GRAB` block that `_decide_collect_all`
+carried on its own, so the same rule cannot silently drift apart between
+objectives again.
+
+Consequences:
+Supersedes, for `ESCAPE_FAST`, only DEC-008's sentence that the strategy
+"deliberately skips glitter"; every other DEC-008 consequence (far-corner
+exit, automatic-escape wiring, the `GameObjective` enum, `COLLECT_ALL_GOLD`'s
+own gold-blocking rule) is unchanged. DEC-009, DEC-010, and DEC-011 are
+unaffected: solvability, the far-corner exit, and the removal of
+`TURN_LEFT` all remain exactly as those decisions left them. `GRAB` still
+costs one action and gold is still worth its existing fixed score under
+`src/wumpus/game/scoring.py`, unchanged by this decision; an `ESCAPE_FAST`
+run that never encounters glitter in an occupied room behaves identically to
+before. Because a stale plan is discarded rather than resumed, an
+`ESCAPE_FAST` route that grabs incidental gold spends one extra BFS
+recomputation, not more; on the canonical 6x6 board this is computationally
+negligible.
+
+Evidence:
+User-authorized maintenance `FAST-ESCAPE-INCIDENTAL-GOLD-012` on 2026-09-26;
+`src/wumpus/agent/strategy.py::Strategy.decide`; `tests/unit/test_strategy.py::
+test_fast_escape_grabs_glitter_from_a_route_already_in_progress`;
+`::test_fast_escape_resumes_rationally_toward_the_exit_after_the_grab`;
+`::test_fast_escape_without_glitter_is_unaffected_by_the_grab_preemption`;
+`tests/unit/test_game_goal_exit.py::
+test_strategy_fast_and_collect_all_both_grab_incidental_glitter`;
+`tests/integration/test_known_maps.py::
+test_real_escape_fast_agent_grabs_incidental_gold_along_its_own_route`; full
+regression suite (`pytest -q`); `tests/e2e/test_seeded_games.py`.
+
 ## Entry format
 
 Use the next sequential identifier and keep each entry concise.

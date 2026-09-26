@@ -99,7 +99,21 @@ class Strategy:
         collected_gold: int,
         glitter: bool,
     ) -> Action:
-        """Return one deterministic action for the configured match objective."""
+        """Return one deterministic action for the configured match objective.
+
+        Glitter in the currently occupied room is a local perceptual event
+        that must preempt any cached movement plan -- including a route
+        already in progress -- for every objective. Neither objective
+        searches for gold or detours toward it; this only stops the agent
+        from walking past gold it is already standing on (DEC-012).
+        """
+
+        if glitter:
+            self._clear()
+            self._last_reason = DecisionReason(
+                Action.GRAB, "Brilho percebido: coletando ouro", position
+            )
+            return Action.GRAB
 
         if self._recovery_required:
             self._recovery_required = False
@@ -130,9 +144,7 @@ class Strategy:
         if self._objective is GameObjective.ESCAPE_FAST:
             return self._decide_fast_escape(knowledge, position, direction, collected_gold)
         if self._objective is GameObjective.COLLECT_ALL_GOLD:
-            return self._decide_collect_all(
-                knowledge, position, direction, collected_gold, glitter
-            )
+            return self._decide_collect_all(knowledge, position, direction, collected_gold)
         raise AssertionError(f"Unsupported game objective: {self._objective!r}")
 
     def _recovery_action(
@@ -196,16 +208,8 @@ class Strategy:
         position: Position,
         direction: Direction,
         collected_gold: int,
-        glitter: bool,
     ) -> Action:
         """Collect every public-count gold, then make the exit the only target."""
-
-        if glitter:
-            self._clear()
-            self._last_reason = DecisionReason(
-                Action.GRAB, "Brilho percebido: coletando ouro", position
-            )
-            return Action.GRAB
 
         if collected_gold >= self._total_gold:
             return self._exit_or_wait(knowledge, position, direction)
